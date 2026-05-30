@@ -1,0 +1,12 @@
+{
+  "name": "SignPro Graphics ERP Remixed",
+  "description": "Comprehensive print shop management system featuring automated quoting, production workflow, inventory tracking, and financial reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

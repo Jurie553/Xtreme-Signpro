@@ -1,0 +1,3 @@
+{
+  "note": "Firebase is configured through VITE_FIREBASE_* environment variables. Keep real project values out of source control."
+}

@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand: #0f172a; /* Slate 900 */
+  --color-brand-accent: #4f46e5; /* Premium Indigo 600 */
+  --color-creative: #f43f5e; /* Rose 500 for secondary energy */
+  --color-vibrant: #10b981; /* Emerald 500 */
+  --color-surface: #f8fafc; /* Sleek high-fidelity Pearl Slate */
+  --color-paper: #ffffff;
+  --color-border: #e2e8f0; 
+  --color-border-strong: #cbd5e1; 
+  
+  --color-text-main: #0f172a; /* Solid Slate 900 */
+  --color-text-muted: #475569; /* Slate 600 */
+  --color-text-light: #94a3b8; /* Slate 400 */
+  
+  --radius-xl: 0.85rem;
+  --radius-2xl: 1.15rem;
+  --radius-3xl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-text-main antialiased selection:bg-brand-accent/10;
+    font-feature-settings: "cv02", "cv05", "cv11", "ss01";
+  }
+}
+
+@layer components {
+  .card-minimal {
+    @apply bg-paper border border-slate-100 p-6 rounded-2xl shadow-[0_4px_20px_-4px_rgba(15,23,42,0.03),0_1px_2px_0_rgba(15,23,42,0.02)] hover:shadow-[0_12px_30px_-6px_rgba(15,23,42,0.06),0_4px_12px_-2px_rgba(15,23,42,0.02)] hover:translate-y-[-2px] transition-all duration-300;
+  }
+  
+  .btn-primary {
+    @apply bg-brand text-white px-5 py-2.5 rounded-xl font-bold hover:bg-slate-800 shadow-md shadow-brand/5 hover:shadow-lg hover:shadow-brand/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none text-xs uppercase tracking-wider;
+  }
+
+  .btn-secondary {
+    @apply bg-paper border border-slate-200 text-text-main px-5 py-2.5 rounded-xl font-bold hover:bg-surface hover:border-slate-300 transition-all active:scale-[0.98] text-xs uppercase tracking-wider;
+  }
+  
+  .badge-status {
+    @apply text-[9px] font-black px-2.5 py-1 rounded-md uppercase tracking-[0.08em] flex items-center gap-1.5 w-fit;
+  }
+
+  .grid-structure {
+    background-size: 30px 30px;
+    background-image: 
+      linear-gradient(to right, rgba(226, 232, 240, 0.4) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(226, 232, 240, 0.4) 1px, transparent 1px);
+    background-position: center center;
+  }
+}
+
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only the targeted content */
+  .printable-content,
+  .printable-content * {
+    visibility: visible !important;
+  }
+
+  /* Reset positioning for the printable content so it fills the page */
+  .printable-content {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 20px !important;
+    margin: 0 !important;
+    background: white !important;
+    display: block !important;
+  }
+
+  /* Hide UI elements within the job card during print */
+  button, 
+  .no-print,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  header {
+    display: none !important;
+  }
+
+  /* Ensure background and borders are printed */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force the job card container to take full width and remove rounding/shadows for print */
+  .max-w-2xl {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  
+  .bg-gray-50\/50 {
+    background: transparent !important;
+  }
+}

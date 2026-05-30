@@ -1,0 +1,315 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "Customer information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "companyName": { "type": "string" },
+        "address": { "type": "string" },
+        "vatNumber": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "email", "createdAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Material supplier information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "leadTime": { "type": "string" },
+        "categories": { "type": "array" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] }
+      },
+      "required": ["name", "email", "status"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Raw materials inventory",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "stockLevel": { "type": "number" },
+        "minStock": { "type": "number" },
+        "unit": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "location": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "thickness": { "type": "string" },
+        "materialType": { "type": "string" },
+        "printingConsiderations": { "type": "string" }
+      },
+      "required": ["name", "category", "stockLevel", "costPrice"]
+    },
+    "Machine": {
+      "title": "Machine",
+      "description": "Production machines",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "maxWidth": { "type": "number" },
+        "speed": { "type": "string" },
+        "costPerHour": { "type": "number" },
+        "costPerCopy": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Idle", "Maintenance"] },
+        "utilization": { "type": "number" }
+      },
+      "required": ["name", "type", "costPerHour", "status"]
+    },
+    "ProductCategory": {
+      "title": "Product Category",
+      "description": "Registry of unified product categories/collections",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" },
+        "active": { "type": "boolean" },
+        "productGroup": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "slug", "type", "active", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Types of products offered",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "defaultMachineId": { "type": "string" },
+        "defaultDepartmentId": { "type": "string" },
+        "setupTime": { "type": "number" },
+        "markupPercent": { "type": "number" },
+        "costingMethod": { "type": "string", "enum": ["Area", "Per Item", "NCR", "Hourly", "Page"] },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "productType": { "type": "string" },
+        "specs": { "type": "object" },
+        "pricingRules": { "type": "object" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "category", "costingMethod"]
+    },
+    "Quote": {
+      "title": "Quote",
+      "description": "Customer quotes",
+      "type": "object",
+      "properties": {
+        "quoteNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "isExpress": { "type": "boolean" },
+        "expressSurcharge": { "type": "number" },
+        "vat": { "type": "number" },
+        "total": { "type": "number" },
+        "profit": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Sent", "Viewed", "Accepted", "Rejected", "Expired"] },
+        "expiryDate": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["quoteNumber", "clientId", "total", "status", "createdAt"]
+    },
+    "PricingSettings": {
+      "title": "Pricing Settings",
+      "description": "Global pricing configurations",
+      "type": "object",
+      "properties": {
+        "expressSurchargeType": { "type": "string", "enum": ["percentage", "flat"] },
+        "expressSurchargeValue": { "type": "number" },
+        "vatRate": { "type": "number" },
+        "currency": { "type": "string" }
+      },
+      "required": ["expressSurchargeType", "expressSurchargeValue", "vatRate", "currency"]
+    },
+    "CompanySettings": {
+      "title": "Company Settings",
+      "description": "Business profile information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "vatNumber": { "type": "string" },
+        "registrationNumber": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "branchCode": { "type": "string" },
+        "website": { "type": "string" },
+        "logoUrl": { "type": "string" }
+      },
+      "required": ["name", "email", "phone", "address"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "Production jobs",
+      "type": "object",
+      "properties": {
+        "jobNumber": { "type": "string" },
+        "quoteId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "productName": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "artwork": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "url": { "type": "string" },
+              "name": { "type": "string" },
+              "status": { "type": "string", "enum": ["Pending", "Approved", "Changes Requested"] },
+              "version": { "type": "number" },
+              "uploadedAt": { "type": "number" },
+              "feedback": { "type": "string" }
+            }
+          }
+        },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "stage": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Normal", "High", "Urgent"] },
+        "dueDate": { "type": "number" },
+        "assignedMachineId": { "type": "string" },
+        "artworkStatus": { "type": "string" },
+        "ncrDetails": {
+          "type": "object",
+          "properties": {
+            "paperColors": { "type": "string" },
+            "startNumber": { "type": "string" },
+            "endNumber": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["jobNumber", "clientId", "stage", "priority", "dueDate", "createdAt"]
+    },
+    "NCRBook": {
+      "title": "NCR Book",
+      "description": "NCR book specifications",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "parts": { "type": "string" },
+        "setsPerBook": { "type": "number" },
+        "size": { "type": "string" },
+        "binding": { "type": "string" },
+        "print": { "type": "string" },
+        "options": { "type": "array" },
+        "cost": { "type": "number" },
+        "sell": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Archived"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "cost", "sell", "status", "createdAt"]
+    },
+    "Package": {
+      "title": "Package",
+      "description": "Bundled products and services",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "featured": { "type": "boolean" },
+        "items": { "type": "array" },
+        "fullPrice": { "type": "number" },
+        "packagePrice": { "type": "number" },
+        "savings": { "type": "number" },
+        "savingsPercent": { "type": "number" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "packagePrice", "status", "createdAt"]
+    },
+    "LithoProduct": {
+      "title": "Litho Product",
+      "description": "Litho printing product specifications and tiered pricing",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "size": { "type": "string" },
+        "paperType": { "type": "string" },
+        "finishing": { "type": "string" },
+        "pricingGrid": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantity": { "type": "number" },
+              "cost": { "type": "number" },
+              "sell": { "type": "number" }
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["Active", "Archived"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "status", "createdAt"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Resource department for grouping jobs",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "color", "createdAt"]
+    },
+    "PurchaseOrder": {
+      "title": "Purchase Order",
+      "description": "Inventory procurement orders",
+      "type": "object",
+      "properties": {
+        "poNumber": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "materialId": { "type": "string" },
+        "quantity": { "type": "number" },
+        "status": { "type": "string", "enum": ["Sent", "Received", "Cancelled"] },
+        "totalCost": { "type": "number" },
+        "orderDate": { "type": "number" }
+      },
+      "required": ["poNumber", "supplierId", "materialId", "quantity", "status", "totalCost", "orderDate"]
+    }
+  },
+  "firestore": {
+    "clients": { "schema": "Client", "description": "Customer registry" },
+    "suppliers": { "schema": "Supplier", "description": "Supplier database" },
+    "materials": { "schema": "Material", "description": "Inventory list" },
+    "machines": { "schema": "Machine", "description": "Asset list" },
+    "products": { "schema": "Product", "description": "Product catalog" },
+    "quotes": { "schema": "Quote", "description": "Sales quotes" },
+    "jobs": { "schema": "Job", "description": "Production jobs" },
+    "settings": { "schema": "PricingSettings", "description": "Global settings" },
+    "ncr_books": { "schema": "NCRBook", "description": "NCR Registry" },
+    "packages": { "schema": "Package", "description": "Product bundles" },
+    "litho_products": { "schema": "LithoProduct", "description": "Litho Product Registry" },
+    "departments": { "schema": "Department", "description": "Resource departments for grouping jobs" },
+    "company_settings": { "schema": "CompanySettings", "description": "Business profile" },
+    "purchase_orders": { "schema": "PurchaseOrder", "description": "Procurement orders" },
+    "product_categories": { "schema": "ProductCategory", "description": "Product collection definitions loaded dynamically" },
+    "counters": { "schema": "object", "description": "Auto-increment counters" }
+  }
+}

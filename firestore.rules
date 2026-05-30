@@ -1,0 +1,291 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow admins global access
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() {
+      return true;
+    }
+
+    function isEmailVerified() {
+      return true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+    
+    function isAdmin() {
+      return true;
+    }
+
+    // --- Collections ---
+
+    match /_connection_test_/check {
+      allow read: if true;
+    }
+
+    match /suppliers/{supplierId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(supplierId) && isValidSupplier(incoming());
+      allow update: if isEmailVerified() && isValidSupplier(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll(['name', 'email', 'status'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.status in ['Active', 'Inactive'];
+    }
+
+    match /products/{productId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(productId) && isValidProduct(incoming());
+      allow update: if isEmailVerified() && isValidProduct(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'category', 'costingMethod'])
+          && data.name is string && data.name.size() <= 100
+          && data.costingMethod in ['Area', 'Per Item', 'NCR', 'Hourly', 'Page'];
+    }
+
+    match /clients/{clientId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(clientId) && isValidClient(incoming());
+      allow update: if isEmailVerified() && isValidClient(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'email', 'createdAt'])
+          && data.name is string && data.name.size() <= 100
+          && data.email is string && data.email.size() <= 150
+          && data.createdAt is number
+          && (data.get('phone', null) == null || data.get('phone', null) is string)
+          && (data.get('companyName', null) == null || data.get('companyName', null) is string)
+          && (data.get('address', null) == null || data.get('address', null) is string)
+          && (data.get('vatNumber', null) == null || data.get('vatNumber', null) is string);
+    }
+
+    match /materials/{materialId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(materialId) && isValidMaterial(incoming());
+      allow update: if isEmailVerified() && isValidMaterial(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidMaterial(data) {
+      return data.keys().hasAll(['name', 'category', 'costPrice', 'supplierId', 'unit', 'stockLevel', 'minStock'])
+          && data.name is string && data.name.size() <= 100
+          && data.category is string
+          && data.costPrice is number
+          && data.stockLevel is number
+          && data.minStock is number
+          && data.unit is string
+          && data.supplierId is string
+          && (data.get('location', null) == null || data.get('location', null) is string)
+          && (data.get('thickness', null) == null || data.get('thickness', null) is string)
+          && (data.get('materialType', null) == null || data.get('materialType', null) is string)
+          && (data.get('printingConsiderations', null) == null || data.get('printingConsiderations', null) is string);
+    }
+
+    match /machines/{machineId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(machineId) && isValidMachine(incoming());
+      allow update: if isEmailVerified() && isValidMachine(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidMachine(data) {
+      return data.keys().hasAll(['name', 'type', 'status'])
+          && data.name is string && data.name.size() <= 100
+          && data.status in ['Active', 'Idle', 'Maintenance'];
+    }
+
+    match /quotes/{quoteId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(quoteId) && isValidQuote(incoming());
+      allow update: if isEmailVerified() && isValidQuote(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidQuote(data) {
+      return data.keys().hasAll(['quoteNumber', 'clientId', 'total', 'items', 'status', 'createdAt'])
+          && data.quoteNumber is string
+          && data.clientId is string
+          && data.total is number && data.total >= 0
+          && data.items is list
+          && data.status in ['Draft', 'Sent', 'Viewed', 'Accepted', 'Rejected', 'Expired']
+          && data.createdAt is number;
+    }
+
+    match /jobs/{jobId} {
+      allow list: if isSignedIn();
+      allow get: if true; // Public access for client approval links
+      allow create: if (isEmailVerified() || isAdmin()) && isValidId(jobId) && isValidJob(incoming());
+      allow update: if (isEmailVerified() || isAdmin()) && isValidJob(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasAll(['jobNumber', 'clientId', 'stage', 'priority', 'dueDate', 'createdAt'])
+          && data.jobNumber is string
+          && data.clientId is string
+          && data.stage in ['Prepress', 'Printing', 'Laminating', 'Finishing', 'Quality Check', 'Ready', 'Delivered', 'Cancelled', 'Embroidery', 'Screenprinting']
+          && data.priority in ['Normal', 'High', 'Urgent']
+          && data.dueDate is number
+          && data.createdAt is number
+          && (data.get('clientName', null) == null || data.get('clientName', null) is string)
+          && (data.get('productName', null) == null || data.get('productName', null) is string)
+          && (data.get('total', null) == null || data.get('total', null) is number)
+          && (data.get('items', null) == null || data.get('items', null) is list)
+          && (data.get('departmentId', null) == null || data.get('departmentId', null) == "" || data.get('departmentId', null) is string)
+          && (data.get('artwork', null) == null || data.get('artwork', null) is list)
+          && (data.get('artworkStatus', null) == null || data.get('artworkStatus', null) is string)
+          && (data.get('quoteId', null) == null || data.get('quoteId', null) is string)
+          && (data.get('ncrDetails', null) == null || data.get('ncrDetails', null) is map);
+    }
+
+    match /departments/{departmentId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(departmentId) && isValidDepartment(incoming());
+      allow update: if isEmailVerified() && isValidDepartment(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidDepartment(data) {
+      return data.keys().hasAll(['name', 'color', 'createdAt'])
+          && data.name is string && data.name.size() <= 100
+          && data.color is string
+          && data.createdAt is number;
+    }
+
+    match /product_categories/{categoryId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(categoryId) && isValidProductCategory(incoming());
+      allow update: if isEmailVerified() && isValidProductCategory(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidProductCategory(data) {
+      return data.keys().hasAll(['name', 'slug', 'type', 'active', 'createdAt'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.slug is string && data.slug.size() > 0 && data.slug.size() <= 100
+          && data.type is string
+          && data.active is bool
+          && data.createdAt is number;
+    }
+    
+    match /settings/{settingId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow write: if isEmailVerified() && isValidId(settingId);
+    }
+
+    match /company_settings/{settingId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow write: if isEmailVerified() && isValidId(settingId);
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if isEmailVerified() && isValidId(counterId);
+    }
+
+    match /ncr_books/{bookId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(bookId) && isValidNCRBook(incoming());
+      allow update: if isEmailVerified() && isValidNCRBook(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidNCRBook(data) {
+      return data.keys().hasAll(['name', 'status', 'createdAt', 'pricingGrid'])
+          && data.name is string && data.name.size() <= 100
+          && data.status in ['Active', 'Archived']
+          && data.pricingGrid is list
+          && data.createdAt is number;
+    }
+
+    match /litho_products/{productId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(productId) && isValidLithoProduct(incoming());
+      allow update: if isEmailVerified() && isValidLithoProduct(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidLithoProduct(data) {
+      return data.keys().hasAll(['name', 'status', 'createdAt', 'pricingGrid'])
+          && data.name is string && data.name.size() <= 100
+          && data.status in ['Active', 'Archived']
+          && data.pricingGrid is list
+          && data.createdAt is number;
+    }
+
+    match /packages/{packageId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(packageId) && isValidPackage(incoming());
+      allow update: if isEmailVerified() && isValidPackage(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidPackage(data) {
+      return data.keys().hasAll(['name', 'packagePrice', 'status', 'createdAt', 'items', 'fullPrice'])
+          && data.name is string && data.name.size() <= 100
+          && data.packagePrice is number
+          && data.fullPrice is number
+          && data.items is list
+          && data.status in ['Active', 'Inactive']
+          && data.createdAt is number;
+    }
+
+    match /purchase_orders/{poId} {
+      allow list: if isEmailVerified();
+      allow get: if isEmailVerified();
+      allow create: if isEmailVerified() && isValidId(poId) && isValidPurchaseOrder(incoming());
+      allow update: if isEmailVerified() && isValidPurchaseOrder(incoming()) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    function isValidPurchaseOrder(data) {
+      return data.keys().hasAll(['poNumber', 'supplierId', 'materialId', 'quantity', 'status', 'totalCost', 'orderDate'])
+          && data.poNumber is string
+          && data.supplierId is string
+          && data.materialId is string
+          && data.quantity is number && data.quantity > 0
+          && data.status in ['Sent', 'Received', 'Cancelled']
+          && data.totalCost is number && data.totalCost >= 0
+          && data.orderDate is number;
+    }
+  }
+}
+
+
