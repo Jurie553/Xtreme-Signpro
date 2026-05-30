@@ -69,11 +69,11 @@ The static frontend can deploy to Vercel with the Vite framework preset.
 
 - Framework preset: `Vite`
 - Install command: `npm install`
-- Build command: `npm run build:vercel`
+- Build command: `npm run build:vercel` or `npm run build` if you also want the unused Cloud Run server bundle generated
 - Output directory: `dist`
-- Vercel config file: `vercel.json`
+- Vercel config file: `vercel.json` contains only the SPA rewrite to `index.html`
 
-`vercel.json` intentionally does not declare any `functions` runtime. The project has no `api/` function directory, and the previous function runtime configuration caused Vercel to fail with `Function Runtimes must have a valid version`.
+`vercel.json` intentionally does not declare `functions`, `builds`, or any `runtime`. The project has no `api/` function directory, and function runtime configuration can cause Vercel to fail before build with `Function Runtimes must have a valid version`.
 
 The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Zoho OAuth, client sync, invoice push, and payment pull require Cloud Run or a future conversion of the Express routes into Vercel serverless functions under an `api/` directory.
 
