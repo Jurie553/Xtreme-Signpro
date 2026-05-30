@@ -123,7 +123,7 @@ const getZohoConfig = async () => {
 
   return {
     clientId: process.env.ZOHO_CLIENT_ID || dbConfig.clientId || '',
-    clientSecret: process.env.ZOHO_CLIENT_SECRET || dbConfig.clientSecret || '',
+    clientSecret: process.env.ZOHO_CLIENT_SECRET || (await getPrivateZohoState())?.clientSecret || dbConfig.clientSecret || '',
     organizationId: process.env.ZOHO_ORGANIZATION_ID || dbConfig.organizationId || '',
     accountsDomain: process.env.ZOHO_ACCOUNTS_URL?.replace(/^https?:\/\//, '') || process.env.ZOHO_ACCOUNTS_DOMAIN || domainInfo.accountsDomain,
     booksApiDomain: process.env.ZOHO_BOOKS_API_URL?.replace(/^https?:\/\//, '') || process.env.ZOHO_BOOKS_API_DOMAIN || domainInfo.booksDomain,
@@ -136,6 +136,7 @@ interface ZohoTokens {
   accessToken: string;
   refreshToken?: string;
   accessTokenExpiresAt: number;
+  clientSecret?: string;
 }
 
 const getZohoTokens = async (): Promise<ZohoTokens | null> => {
@@ -150,6 +151,10 @@ const getZohoTokens = async (): Promise<ZohoTokens | null> => {
   return null;
 };
 
+const getPrivateZohoState = async () => {
+  return await getZohoTokens();
+};
+
 const saveZohoTokens = async (tokens: Partial<ZohoTokens>) => {
   try {
     const existing = await getZohoTokens() || { accessToken: '', accessTokenExpiresAt: 0 };
@@ -157,6 +162,7 @@ const saveZohoTokens = async (tokens: Partial<ZohoTokens>) => {
       accessToken: tokens.accessToken || existing.accessToken,
       refreshToken: tokens.refreshToken || existing.refreshToken,
       accessTokenExpiresAt: tokens.accessTokenExpiresAt || existing.accessTokenExpiresAt,
+      clientSecret: tokens.clientSecret || existing.clientSecret,
     };
     await db.collection('zoho_private').doc('state').set(updated, { merge: true });
     
@@ -182,6 +188,97 @@ const addSyncLog = async (recordName: string, syncAction: string, success: boole
   } catch (e) {
     console.error("Failed to append sync log:", e);
   }
+};
+
+const splitName = (name = 'Client') => {
+  const parts = String(name || 'Client').trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || 'Client',
+    lastName: parts.slice(1).join(' ') || 'ERP'
+  };
+};
+
+const buildZohoContactPayload = (client: any) => {
+  const { firstName, lastName } = splitName(client.contactPerson || client.name);
+  const billingAddress = client.billingAddress || client.address || '';
+  return {
+    contact_name: client.companyName || client.name || 'Client',
+    company_name: client.companyName || '',
+    contact_type: 'customer',
+    billing_address: billingAddress ? { address: billingAddress } : undefined,
+    contact_persons: [
+      {
+        first_name: firstName,
+        last_name: lastName,
+        email: client.email || '',
+        phone: client.phone || '',
+        mobile: client.whatsappNumber || client.mobile || '',
+        is_primary_contact: true
+      }
+    ]
+  };
+};
+
+const findOrCreateZohoContact = async (clientId: string, client: any) => {
+  if (client.zohoCustomerId) {
+    return client.zohoCustomerId;
+  }
+
+  const zohoContactsData = await makeZohoBooksRequest('/contacts');
+  const zohoContacts = zohoContactsData.contacts || [];
+  const clientEmail = (client.email || '').trim().toLowerCase();
+  const clientName = (client.companyName || client.name || '').trim().toLowerCase();
+
+  const matched = zohoContacts.find((c: any) => {
+    const contactEmail = (c.email || c.primary_contact_email || '').trim().toLowerCase();
+    const contactName = (c.company_name || c.contact_name || '').trim().toLowerCase();
+    return (clientEmail && contactEmail === clientEmail) || (clientName && contactName === clientName);
+  });
+
+  if (matched?.contact_id) {
+    await db.collection('clients').doc(clientId).set({
+      zohoCustomerId: matched.contact_id,
+      zohoSyncStatus: 'Synced'
+    }, { merge: true });
+    return matched.contact_id;
+  }
+
+  const created = await makeZohoBooksRequest('/contacts', {
+    method: 'POST',
+    body: JSON.stringify(buildZohoContactPayload(client))
+  });
+  const createdId = created.contact?.contact_id;
+  if (!createdId) {
+    throw new Error('Zoho contact creation succeeded without returning a contact_id.');
+  }
+
+  await db.collection('clients').doc(clientId).set({
+    zohoCustomerId: createdId,
+    zohoSyncStatus: 'Synced'
+  }, { merge: true });
+  await addSyncLog(client.name || client.companyName || clientId, 'Push', true, 'Created Zoho Books customer contact.', 'Client');
+  return createdId;
+};
+
+const buildZohoLineItems = (items: any[] = [], fallbackName = 'Custom print job', fallbackTotal = 0) => {
+  const sourceItems = items.length > 0 ? items : [{
+    description: fallbackName,
+    productName: fallbackName,
+    quantity: 1,
+    totalPrice: fallbackTotal
+  }];
+
+  return sourceItems.map((item: any) => {
+    const quantity = Math.max(Number(item.quantity || 1), 1);
+    const totalPrice = Number(item.totalPrice ?? item.basePrice ?? 0);
+    const rate = totalPrice > 0 ? totalPrice / quantity : Number(item.unitPrice ?? item.sellPrice ?? item.unitCost ?? 0);
+    return {
+      name: String(item.productName || item.description || fallbackName).slice(0, 100),
+      rate: Number(rate.toFixed(2)),
+      quantity,
+      description: String(item.description || fallbackName).slice(0, 500)
+    };
+  });
 };
 
 // --- Check and Refresh Token Handler ---
@@ -300,6 +397,99 @@ const getRedirectUri = (req: express.Request) => {
 // ==========================================
 // ========== 2. API Routes =================
 // ==========================================
+
+app.get('/api/zoho/config', async (req, res) => {
+  try {
+    const config = await getZohoConfig();
+    const tokens = await getZohoTokens();
+    let publicSettings: any = {};
+    try {
+      const settingsSnap = await db.collection('settings').doc('zoho').get();
+      publicSettings = settingsSnap.exists ? settingsSnap.data() || {} : {};
+    } catch (settingsErr) {
+      console.warn('Zoho config endpoint could not read public settings; returning environment/default config only.', settingsErr);
+    }
+
+    return res.json({
+      success: true,
+      config: {
+        clientId: config.clientId,
+        organizationId: config.organizationId,
+        region: config.region,
+        redirectUri: getRedirectUri(req),
+        connected: !!tokens?.refreshToken || !!publicSettings.connected,
+        lastSyncClients: publicSettings.lastSyncClients || 0,
+        lastSyncProducts: publicSettings.lastSyncProducts || 0,
+        lastSyncPayments: publicSettings.lastSyncPayments || 0,
+        hasClientSecret: !!config.clientSecret,
+        hasRefreshToken: !!tokens?.refreshToken,
+        hasAccessToken: !!tokens?.accessToken,
+        accessTokenExpiresAt: tokens?.accessTokenExpiresAt || 0,
+      }
+    });
+  } catch (err: any) {
+    return res.status(200).json({
+      success: false,
+      error: 'Could not read Zoho configuration: ' + err.message
+    });
+  }
+});
+
+app.post('/api/zoho/config', async (req, res) => {
+  try {
+    const clientId = String(req.body.clientId || '').trim();
+    const clientSecret = String(req.body.clientSecret || '').trim();
+    const organizationId = String(req.body.organizationId || '').trim();
+    const region = REGIONS[req.body.region] ? req.body.region : 'us';
+
+    await db.collection('settings').doc('zoho').set({
+      clientId,
+      organizationId,
+      region,
+      updatedAt: Date.now()
+    }, { merge: true });
+
+    if (clientSecret) {
+      await db.collection('zoho_private').doc('state').set({
+        clientSecret
+      }, { merge: true });
+    }
+
+    await addSyncLog('Zoho Configuration', 'Sync', true, 'Zoho configuration saved. Client secret stored in private server state.', 'Client');
+
+    return res.json({
+      success: true,
+      message: 'Zoho configuration saved safely.'
+    });
+  } catch (err: any) {
+    await addSyncLog('Zoho Configuration', 'Sync', false, err.message, 'Client');
+    return res.status(200).json({
+      success: false,
+      error: 'Zoho configuration save failed: ' + err.message
+    });
+  }
+});
+
+app.post('/api/zoho/disconnect', async (req, res) => {
+  try {
+    await db.collection('zoho_private').doc('state').set({
+      accessToken: '',
+      refreshToken: '',
+      accessTokenExpiresAt: 0
+    }, { merge: true });
+    await db.collection('settings').doc('zoho').set({
+      connected: false,
+      updatedAt: Date.now()
+    }, { merge: true });
+    await addSyncLog('Zoho Connection', 'Sync', true, 'Zoho Books disconnected and OAuth tokens cleared.', 'Client');
+    return res.json({ success: true, message: 'Zoho Books disconnected.' });
+  } catch (err: any) {
+    return res.status(200).json({
+      success: false,
+      error: 'Could not disconnect Zoho Books: ' + err.message
+    });
+  }
+});
 
 // Auth URL Route
 app.get('/api/zoho/auth-url', async (req, res) => {
@@ -1037,10 +1227,12 @@ app.post('/api/zoho/sync-clients', async (req, res) => {
 
         const newClientData = {
           name: contact.contact_name || nameToUse,
-          email: contact.email || `${contact.customer_id}@zoho-import.com`,
+          email: contact.email || contact.primary_contact_email || `${contact.customer_id}@zoho-import.com`,
           phone: contact.phone || '',
           companyName: contact.company_name || '',
           address: billingStr || '',
+          zohoCustomerId: contact.contact_id || contact.customer_id || '',
+          zohoSyncStatus: 'Synced',
           createdAt: Date.now(),
           activeStatus: true,
           notes: 'Imported from Zoho Books Sync',
@@ -1050,6 +1242,17 @@ app.post('/api/zoho/sync-clients', async (req, res) => {
         pulledCount++;
         await addSyncLog(contact.contact_name || nameToUse, 'Pull', true, 'Synchronized and pulled customer directory from Zoho Books to local client database', 'Client');
       } else {
+        const matchedClient = dbClients.find(c => {
+          const erpEmail = (c.email || '').trim().toLowerCase();
+          const erpName = (c.companyName || c.name || '').trim().toLowerCase();
+          return (contactEmail && erpEmail === contactEmail) || (contactName && erpName === contactName);
+        });
+        if (matchedClient && contact.contact_id && matchedClient.zohoCustomerId !== contact.contact_id) {
+          await db.collection('clients').doc(matchedClient.id).set({
+            zohoCustomerId: contact.contact_id,
+            zohoSyncStatus: 'Synced'
+          }, { merge: true });
+        }
         skippedCount++;
       }
     }
@@ -1065,27 +1268,17 @@ app.post('/api/zoho/sync-clients', async (req, res) => {
       const matchedInZoho = zohoEmailsSet.has(clientEmail) || zohoNamesSet.has(clientName);
       if (!matchedInZoho) {
         try {
-          const names = (client.name || 'Client').split(' ');
-          const firstName = names[0] || 'Client';
-          const lastName = names.slice(1).join(' ') || 'ERP';
-
-          const payload = {
-            contact_name: client.companyName || client.name,
-            company_name: client.companyName || '',
-            contact_persons: [
-              {
-                first_name: firstName,
-                last_name: lastName,
-                email: client.email || '',
-                phone: client.phone || ''
-              }
-            ]
-          };
-
-          await makeZohoBooksRequest('/contacts', {
+          const response = await makeZohoBooksRequest('/contacts', {
             method: 'POST',
-            body: JSON.stringify(payload)
+            body: JSON.stringify(buildZohoContactPayload(client))
           });
+          const zohoCustomerId = response.contact?.contact_id;
+          if (zohoCustomerId) {
+            await db.collection('clients').doc(client.id).set({
+              zohoCustomerId,
+              zohoSyncStatus: 'Synced'
+            }, { merge: true });
+          }
 
           pushedCount++;
           await addSyncLog(client.name, 'Push', true, 'Pushed and mapped local client record as Zoho Books Customer Contact', 'Client');
@@ -1141,43 +1334,10 @@ app.post('/api/zoho/push-quote', async (req, res) => {
     }
     const client = clientDoc.data() as any;
 
-    const zohoContactsData = await makeZohoBooksRequest('/contacts');
-    const zohoContacts = zohoContactsData.contacts || [];
-
-    let zohoContact = zohoContacts.find((c: any) => 
-      (client.email && (c.email || '').trim().toLowerCase() === client.email.trim().toLowerCase()) ||
-      (c.company_name || '').trim().toLowerCase() === (client.companyName || client.name).trim().toLowerCase()
-    );
-
-    let zohoContactId = zohoContact?.contact_id;
-
-    if (!zohoContactId) {
-      const names = (client.name || 'Client').split(' ');
-      const fName = names[0] || 'Client';
-      const lName = names.slice(1).join(' ') || 'ERP';
-
-      const cPayload = {
-        contact_name: client.companyName || client.name,
-        company_name: client.companyName || '',
-        contact_persons: [{ first_name: fName, last_name: lName, email: client.email || '', phone: client.phone || '' }]
-      };
-
-      const resContact = await makeZohoBooksRequest('/contacts', {
-        method: 'POST',
-        body: JSON.stringify(cPayload)
-      });
-      zohoContactId = resContact.contact?.contact_id;
-      await addSyncLog(client.name, 'Push', true, 'On-the-fly created Zoho Books contact while preparing estimate', 'Client');
-    }
-
+    const zohoContactId = await findOrCreateZohoContact(quote.clientId, client);
     if (!zohoContactId) throw new Error('Could not associate client with a valid Zoho Books Customer Contact ID.');
 
-    const lineItems = (quote.items || []).map((item: any) => ({
-      name: item.productName || item.description || 'Custom print job',
-      rate: item.unitCost || item.totalPrice / (item.quantity || 1),
-      quantity: item.quantity || 1,
-      description: item.description || 'Corporate print design and delivery spec'
-    }));
+    const lineItems = buildZohoLineItems(quote.items || [], 'Custom print job', quote.subtotal || quote.total || 0);
 
     const estimatePayload = {
       customer_id: zohoContactId,
@@ -1187,12 +1347,13 @@ app.post('/api/zoho/push-quote', async (req, res) => {
       notes: quote.notes || 'Generated securely from SignPro ERP.'
     };
 
-    const resEstimate = await makeZohoBooksRequest('/estimates', {
-      method: 'POST',
+    const existingEstimateId = quote.zohoEstimateId;
+    const resEstimate = await makeZohoBooksRequest(existingEstimateId ? `/estimates/${existingEstimateId}` : '/estimates', {
+      method: existingEstimateId ? 'PUT' : 'POST',
       body: JSON.stringify(estimatePayload)
     });
 
-    const zohoEstId = resEstimate.estimate?.estimate_id;
+    const zohoEstId = resEstimate.estimate?.estimate_id || existingEstimateId;
 
     // Save Sync Data to Db
     await db.collection('quotes').doc(quoteId).set({
@@ -1205,7 +1366,7 @@ app.post('/api/zoho/push-quote', async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Success! Quote ${quote.quoteNumber} transferred as Estimate: ${resEstimate.estimate?.estimate_number}`,
+      message: `Success! Quote ${quote.quoteNumber} ${existingEstimateId ? 'updated in' : 'transferred to'} Zoho Books as Estimate: ${resEstimate.estimate?.estimate_number || zohoEstId}`,
       estimateId: zohoEstId
     });
   } catch (err: any) {
@@ -1239,53 +1400,14 @@ app.post('/api/zoho/push-invoice', async (req, res) => {
     }
     const client = clientDoc.data() as any;
 
-    const zohoContactsData = await makeZohoBooksRequest('/contacts');
-    const zohoContacts = zohoContactsData.contacts || [];
-
-    let zohoContact = zohoContacts.find((c: any) => 
-      (client.email && (c.email || '').trim().toLowerCase() === client.email.trim().toLowerCase()) ||
-      (c.company_name || '').trim().toLowerCase() === (client.companyName || client.name).trim().toLowerCase()
-    );
-
-    let zohoContactId = zohoContact?.contact_id;
-
-    if (!zohoContactId) {
-      const names = (client.name || 'Client').split(' ');
-      const fName = names[0] || 'Client';
-      const lName = names.slice(1).join(' ') || 'ERP';
-
-      const cPayload = {
-        contact_name: client.companyName || client.name,
-        company_name: client.companyName || '',
-        contact_persons: [{ first_name: fName, last_name: lName, email: client.email || '', phone: client.phone || '' }]
-      };
-
-      const resContact = await makeZohoBooksRequest('/contacts', {
-        method: 'POST',
-        body: JSON.stringify(cPayload)
-      });
-      zohoContactId = resContact.contact?.contact_id;
-      await addSyncLog(client.name, 'Push', true, 'On-the-fly created Zoho contact while preparing invoice context', 'Client');
-    }
-
+    const zohoContactId = await findOrCreateZohoContact(job.clientId, client);
     if (!zohoContactId) throw new Error('Could not associate client with any Zoho customer ID.');
 
-    let lineItems: any[] = [];
-    if (job.items && job.items.length > 0) {
-      lineItems = job.items.map((item: any) => ({
-        name: item.productName || item.description || job.productName,
-        rate: item.unitCost || item.totalPrice / (item.quantity || 1),
-        quantity: item.quantity || 1,
-        description: item.description || `Job Production Specifications -- ${job.jobNumber}`
-      }));
-    } else {
-      lineItems = [{
-        name: job.productName || 'Signature Corporate Production',
-        rate: job.total || 0,
-        quantity: 1,
-        description: `Custom Signage / Print Order Card -- ${job.jobNumber}`
-      }];
-    }
+    const lineItems = buildZohoLineItems(
+      job.items || [],
+      job.productName || `Custom Signage / Print Order Card -- ${job.jobNumber}`,
+      job.total || 0
+    );
 
     const invoicePayload = {
       customer_id: zohoContactId,
@@ -1295,13 +1417,14 @@ app.post('/api/zoho/push-invoice', async (req, res) => {
       notes: job.notes || 'Converted seamlessly from completed ERP job cards.'
     };
 
-    const resInvoice = await makeZohoBooksRequest('/invoices', {
-      method: 'POST',
+    const existingInvoiceId = job.zohoInvoiceId;
+    const resInvoice = await makeZohoBooksRequest(existingInvoiceId ? `/invoices/${existingInvoiceId}` : '/invoices', {
+      method: existingInvoiceId ? 'PUT' : 'POST',
       body: JSON.stringify(invoicePayload)
     });
 
-    const zohoInvoiceId = resInvoice.invoice?.invoice_id;
-    const invoiceNumber = resInvoice.invoice?.invoice_number;
+    const zohoInvoiceId = resInvoice.invoice?.invoice_id || existingInvoiceId;
+    const invoiceNumber = resInvoice.invoice?.invoice_number || job.zohoInvoiceNumber;
 
     await db.collection('jobs').doc(jobId).set({
       zohoInvoiceId,
@@ -1314,7 +1437,7 @@ app.post('/api/zoho/push-invoice', async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Invoice active in Zoho! Invoice ID: ${invoiceNumber}`,
+      message: `Invoice ${existingInvoiceId ? 'updated' : 'created'} in Zoho Books. Invoice ID: ${invoiceNumber || zohoInvoiceId}`,
       invoiceId: zohoInvoiceId,
       invoiceNumber
     });
@@ -1338,7 +1461,7 @@ app.post('/api/zoho/sync-products', async (req, res) => {
   try {
     const zohoItemsData = await makeZohoBooksRequest('/items');
     const zohoItems = zohoItemsData.items || [];
-    const zohoItemNamesSet = new Set(zohoItems.map((i: any) => i.name.trim().toLowerCase()));
+    const zohoItemByName = new Map(zohoItems.map((i: any) => [String(i.name || '').trim().toLowerCase(), i]));
 
     const productsSnap = await db.collection('products').get();
     const dbProducts = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -1346,19 +1469,27 @@ app.post('/api/zoho/sync-products', async (req, res) => {
     for (const p of dbProducts) {
       const prodName = (p.name || '').trim().toLowerCase();
       
-      if (!zohoItemNamesSet.has(prodName)) {
+      const matchedItem = zohoItemByName.get(prodName);
+      if (!matchedItem) {
         try {
+          const baseRate = Number(p.baseCost || p.minimumCharge || 100);
+          const markup = Number(p.markupPercentage ?? p.markupPercent ?? 0);
           const payload = {
             name: p.name,
-            rate: p.markupPercent ? 100 * (1 + p.markupPercent / 100) : 100.0,
+            rate: Number((baseRate * (1 + markup / 100)).toFixed(2)),
             description: p.description || `${p.category || 'ERP'} Product - costed via ${p.costingMethod}`,
             product_type: 'goods',
           };
 
-          await makeZohoBooksRequest('/items', {
+          const createdItem = await makeZohoBooksRequest('/items', {
             method: 'POST',
             body: JSON.stringify(payload)
           });
+          await db.collection('products').doc(p.id).set({
+            zohoItemId: createdItem.item?.item_id,
+            zohoSynced: true,
+            zohoSyncDate: Date.now()
+          }, { merge: true });
 
           pushedCount++;
           await addSyncLog(p.name, 'Push', true, 'Exported catalog product to Zoho Books inventory items', 'Product');
@@ -1369,6 +1500,12 @@ app.post('/api/zoho/sync-products', async (req, res) => {
         }
       } else {
         mappedCount++;
+        const matchedZohoItem = matchedItem as any;
+        await db.collection('products').doc(p.id).set({
+          zohoItemId: matchedZohoItem.item_id,
+          zohoSynced: true,
+          zohoSyncDate: Date.now()
+        }, { merge: true });
       }
     }
 

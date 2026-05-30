@@ -113,6 +113,7 @@ export default function ZohoSettingsTab() {
     hasAccessToken: boolean;
     accessTokenExpiresAt: number;
     isExpired: boolean;
+    hasClientSecret?: boolean;
   } | null>(null);
 
   // Debug Panel metrics
@@ -142,10 +143,44 @@ export default function ZohoSettingsTab() {
     if (zohoSettingsList.length > 0) {
       const zS = zohoSettingsList.find(s => s.id === 'zoho');
       if (zS) {
-        setSettings(prev => ({ ...prev, ...zS, redirectUri: window.location.origin + '/api/zoho/callback' }));
+        setSettings(prev => ({ ...prev, ...zS, clientSecret: '', redirectUri: window.location.origin + '/api/zoho/callback' }));
       }
     }
   }, [zohoSettingsList]);
+
+  const loadServerConfig = async () => {
+    try {
+      const response = await fetch('/api/zoho/config');
+      const data = await response.json();
+      if (data.success && data.config) {
+        setSettings(prev => ({
+          ...prev,
+          clientId: data.config.clientId || prev.clientId,
+          clientSecret: '',
+          organizationId: data.config.organizationId || prev.organizationId,
+          region: data.config.region || prev.region,
+          redirectUri: data.config.redirectUri || prev.redirectUri,
+          connected: !!data.config.connected,
+          lastSyncClients: data.config.lastSyncClients || 0,
+          lastSyncProducts: data.config.lastSyncProducts || 0,
+          lastSyncPayments: data.config.lastSyncPayments || 0,
+        }));
+        setTokenStatus({
+          hasRefreshToken: !!data.config.hasRefreshToken,
+          hasAccessToken: !!data.config.hasAccessToken,
+          accessTokenExpiresAt: data.config.accessTokenExpiresAt || 0,
+          isExpired: data.config.accessTokenExpiresAt ? Date.now() > data.config.accessTokenExpiresAt : true,
+          hasClientSecret: !!data.config.hasClientSecret,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load Zoho server config', e);
+    }
+  };
+
+  useEffect(() => {
+    loadServerConfig();
+  }, []);
 
   // Check token status on mount and when tab shifts
   const checkTokenStatus = async () => {
@@ -166,12 +201,12 @@ export default function ZohoSettingsTab() {
 
       const data = await response.json();
       if (data.success) {
-        setTokenStatus(data);
+        setTokenStatus(prev => ({ ...(prev || {}), ...data }));
         setSettings(prev => ({ ...prev, connected: data.hasRefreshToken }));
         setDebugLog(prev => ({
           ...prev,
           backendStatus: 'Online / Healthy',
-          hasRefreshToken: data.hasRefreshToken ? 'Yes (Stored securely in safe database state)' : 'Missing',
+          hasRefreshToken: data.hasRefreshToken ? 'Yes (stored securely on the server)' : 'Missing',
           accessTokenRefreshSuccess: data.hasRefreshToken ? (data.isExpired ? 'Needs Refresh' : 'Verified Sessions Active') : 'N/A',
           orgIdFound: settings.organizationId ? `Yes (${settings.organizationId})` : 'Missing'
         }));
@@ -255,12 +290,20 @@ export default function ZohoSettingsTab() {
         clientSecret: settings.clientSecret.trim(),
         organizationId: settings.organizationId.trim(),
       };
-      await setDocument('settings', 'zoho', {
-        clientId: sanitizedSettings.clientId,
-        clientSecret: sanitizedSettings.clientSecret,
-        organizationId: sanitizedSettings.organizationId,
-        region: sanitizedSettings.region
+      const saveResponse = await fetch('/api/zoho/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: sanitizedSettings.clientId,
+          clientSecret: sanitizedSettings.clientSecret,
+          organizationId: sanitizedSettings.organizationId,
+          region: sanitizedSettings.region
+        })
       });
+      const saveData = await saveResponse.json();
+      if (!saveData.success) {
+        throw new Error(saveData.error || 'Zoho configuration could not be saved.');
+      }
       setSettings(sanitizedSettings);
 
       const response = await fetch('/api/zoho/auth-url');
@@ -307,24 +350,15 @@ export default function ZohoSettingsTab() {
     
     setTesting(true);
     try {
-      // Clear Firestore public and private configurations
-      await setDocument('settings', 'zoho', {
-        clientId: settings.clientId,
-        clientSecret: settings.clientSecret,
-        organizationId: settings.organizationId,
-        region: settings.region,
-        connected: false,
-      });
-
-      // Erase secure backend collection document
-      await setDocument('zoho_private', 'state', {
-        accessToken: '',
-        refreshToken: '',
-        accessTokenExpiresAt: 0
-      });
+      const response = await fetch('/api/zoho/disconnect', { method: 'POST' });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Disconnect failed.');
+      }
 
       setSettings(prev => ({
         ...prev,
+        clientSecret: '',
         connected: false
       }));
 
@@ -347,14 +381,23 @@ export default function ZohoSettingsTab() {
         clientSecret: settings.clientSecret.trim(),
         organizationId: settings.organizationId.trim(),
       };
-      await setDocument('settings', 'zoho', {
-        clientId: sanitizedSettings.clientId,
-        clientSecret: sanitizedSettings.clientSecret,
-        organizationId: sanitizedSettings.organizationId,
-        region: sanitizedSettings.region
+      const response = await fetch('/api/zoho/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: sanitizedSettings.clientId,
+          clientSecret: sanitizedSettings.clientSecret,
+          organizationId: sanitizedSettings.organizationId,
+          region: sanitizedSettings.region
+        })
       });
-      setSettings(sanitizedSettings);
-      toast.success('Configuration parameters saved in local database registry.');
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Configuration could not be saved.');
+      }
+      setSettings({ ...sanitizedSettings, clientSecret: '' });
+      toast.success('Zoho configuration saved. Secret values are kept server-side.');
+      loadServerConfig();
       checkTokenStatus();
     } catch (err: any) {
       toast.error('Failed to store configuration: ' + err.message);
@@ -819,7 +862,7 @@ export default function ZohoSettingsTab() {
                     <li>Go to Zoho Developer Console (<a href="https://api-console.zoho.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900 flex-inline items-center">api-console.zoho.com <ExternalLink size={8} className="inline ml-0.5" /></a>).</li>
                     <li>Add a <strong>"Server-Based Applications"</strong> Client registry.</li>
                     <li>Set your homepage URL and paste redirect URI: <code>{settings.redirectUri}</code></li>
-                    <li>Copy Client ID, Client Secret, and Organization ID into the fields below and select your correct region.</li>
+                    <li>Copy Client ID, Client Secret, and Organization ID into the fields below and select your correct region. The secret is stored server-side only.</li>
                     <li>Click <strong>Connect To Zoho Books</strong> to authorize the system.</li>
                   </ol>
                 </div>
@@ -837,14 +880,19 @@ export default function ZohoSettingsTab() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-text-light uppercase tracking-widest ml-1">Client Secret</label>
+                  <label className="text-[10px] font-black text-text-light uppercase tracking-widest ml-1">
+                    Client Secret {tokenStatus?.hasClientSecret ? '(saved server-side)' : ''}
+                  </label>
                   <input 
                     type="password" 
                     value={settings.clientSecret}
                     onChange={(e) => setSettings({ ...settings, clientSecret: e.target.value })}
-                    placeholder="••••••••••••••••"
+                    placeholder={tokenStatus?.hasClientSecret ? 'Leave blank to keep existing saved secret' : 'Paste Zoho client secret'}
                     className="w-full px-5 py-3.5 bg-gray-50 border border-border rounded-xl font-bold text-xs"
                   />
+                  <p className="text-[8px] font-bold text-text-muted uppercase tracking-wide">
+                    For safety this field never reloads the saved secret into the browser.
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-text-light uppercase tracking-widest ml-1">Organization ID</label>
