@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Plus, ListFilter, Trash2, Edit2, Mail, Phone, Building2, Upload, Loader2, History, FileText, Briefcase, Clock, ExternalLink, X, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, ListFilter, Trash2, Edit2, Mail, Phone, Building2, Upload, Loader2, History, FileText, Briefcase, Clock, ExternalLink, X, CheckCircle2, Users } from 'lucide-react';
 import Papa from 'papaparse';
 import { cn } from '@/src/lib/utils';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -118,9 +118,13 @@ export default function Clients() {
   }
 
   return (
-    <div className="flex flex-col gap-10">
-      <div className="flex items-center justify-between gap-6">
-        <div className="relative group w-full max-w-md">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h2 className="page-title">Client Directory</h2>
+          <p className="page-subtitle mt-1">Manage customer details, quote history, and jobcard activity.</p>
+        </div>
+        <div className="relative group w-full lg:max-w-md">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-light group-focus-within:text-brand transition-colors" size={18} />
           <input 
             type="text" 
@@ -130,7 +134,7 @@ export default function Clients() {
             className="w-full pl-12 pr-4 py-3 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand transition-all shadow-sm"
           />
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input 
             type="file" 
             ref={fileInputRef}
@@ -141,7 +145,7 @@ export default function Clients() {
           <button 
             onClick={() => fileInputRef.current?.click()}
             disabled={isImporting}
-            className="flex items-center gap-2 px-6 py-3 bg-white border border-border rounded-xl text-sm font-bold text-text-muted hover:border-brand hover:text-brand transition-all shadow-sm disabled:opacity-50"
+            className="btn-secondary flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {isImporting ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
             {isImporting ? 'Importing...' : 'Import CSV'}
@@ -159,7 +163,7 @@ export default function Clients() {
         </div>
       </div>
 
-      <div className="card-minimal p-0 overflow-hidden">
+      <div className="table-shell overflow-x-auto">
         <table className="w-full text-left min-w-[1000px]">
           <thead>
             <tr className="bg-gray-50/50 border-b border-border">
@@ -246,8 +250,10 @@ export default function Clients() {
             ))}
             {filteredClients.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-8 py-20 text-center text-text-muted font-medium italic">
-                  No clients found matching your search.
+                <td colSpan={5} className="empty-state">
+                  <Users size={34} className="mx-auto text-slate-300 mb-3" />
+                  <p className="font-black text-text-main">{searchTerm ? 'No matching clients' : 'No clients yet'}</p>
+                  <p className="text-sm mt-1">{searchTerm ? 'Try a different name, company, or email.' : 'Add a client to start quoting and jobcard tracking.'}</p>
                 </td>
               </tr>
             )}
@@ -529,14 +535,17 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 bg-text-main/20 backdrop-blur-sm overflow-y-auto pt-10 sm:pt-20">
-      <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 relative mb-10 sm:mb-20">
-        <div className="p-8 border-b border-border flex items-center justify-between shrink-0">
-          <h2 className="text-2xl font-bold text-text-main tracking-tight">{client ? 'Edit Client' : 'Add New Client'}</h2>
+      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 relative mb-10 sm:mb-20">
+        <div className="p-6 sm:p-8 border-b border-border flex items-center justify-between shrink-0 bg-slate-50/60">
+          <div>
+            <h2 className="text-2xl font-black text-text-main tracking-tight">{client ? 'Edit Client' : 'Add New Client'}</h2>
+            <p className="text-sm text-text-muted font-medium mt-1">Keep contact and billing details simple and accurate.</p>
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors leading-none text-2xl">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-text-light uppercase tracking-widest mb-2">Full Name / Contact Person</label>
               <input 
                 required
@@ -547,7 +556,8 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
                     setFormData(prev => ({ ...prev, companyName: prev.name }));
                   }
                 }}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="e.g. Thabo Mokoena"
+                className="form-field bg-gray-50"
               />
             </div>
             <div>
@@ -557,7 +567,8 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="name@company.co.za"
+                className="form-field bg-gray-50"
               />
             </div>
             <div>
@@ -566,7 +577,8 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
                 required
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="+27..."
+                className="form-field bg-gray-50"
               />
             </div>
             <div>
@@ -574,23 +586,26 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
               <input
                 value={formData.whatsappNumber}
                 onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="+27..."
+                className="form-field bg-gray-50"
               />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-text-light uppercase tracking-widest mb-2">Company Name (Optional)</label>
               <input 
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="Company or trading name"
+                className="form-field bg-gray-50"
               />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-text-light uppercase tracking-widest mb-2">Address</label>
               <textarea 
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand h-24"
+                placeholder="Street address, suburb, city"
+                className="form-field bg-gray-50 h-24"
               />
             </div>
             <div>
@@ -598,7 +613,8 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
               <input
                 value={formData.vatNumber}
                 onChange={(e) => setFormData({ ...formData, vatNumber: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="Optional"
+                className="form-field bg-gray-50"
               />
             </div>
             <div>
@@ -606,7 +622,8 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
               <input
                 value={formData.zohoCustomerId}
                 onChange={(e) => setFormData({ ...formData, zohoCustomerId: e.target.value })}
-                className="w-full px-5 py-3 bg-gray-50 border border-border rounded-xl font-bold focus:outline-none focus:ring-4 focus:ring-brand/5 focus:border-brand"
+                placeholder="Optional"
+                className="form-field bg-gray-50"
               />
             </div>
           </div>

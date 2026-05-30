@@ -387,12 +387,12 @@ export default function PublicApproval() {
   // 1. Loading Screen View
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
-        <div className="p-8 bg-slate-950 border border-slate-800 shadow-2xl rounded-3xl flex flex-col items-center max-w-sm space-y-4">
-          <div className="w-14 h-14 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 text-center">
+        <div className="p-8 bg-white border border-slate-200 shadow-2xl rounded-3xl flex flex-col items-center max-w-sm space-y-4">
+          <div className="w-14 h-14 border-4 border-blue-100 border-t-brand-accent rounded-full animate-spin" />
           <div>
-            <span className="text-xs font-black tracking-widest uppercase text-slate-100 block">SignPro Security Handshake</span>
-            <span className="text-[10px] font-bold text-slate-500 uppercase mt-1 block">Authenticating Secure Token Access...</span>
+            <span className="text-xs font-black tracking-widest uppercase text-text-main block">Xtreme SignPro approval portal</span>
+            <span className="text-[10px] font-bold text-text-muted uppercase mt-1 block">Checking your secure approval link...</span>
           </div>
         </div>
       </div>
@@ -402,17 +402,17 @@ export default function PublicApproval() {
   // 2. Custom Branded Public Message View (For invalid, expired, revoked, or used tokens)
   if (errorTitle || !tokenRecord) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
-        <div className="max-w-md bg-slate-950 border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-5">
-          <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center mx-auto">
-            <AlertCircle size={32} className="text-rose-500 animate-pulse" />
+      <div className="min-h-screen bg-surface flex items-center justify-center p-6 text-center">
+        <div className="max-w-md bg-white border border-slate-200 p-8 rounded-3xl shadow-2xl space-y-5">
+          <div className="w-16 h-16 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertCircle size={32} className="text-red-500" />
           </div>
-          <h1 className="text-2xl font-black text-slate-100 tracking-tight uppercase italic">{errorTitle || 'Portal Verification Issue'}</h1>
-          <p className="text-xs font-semibold text-slate-400 leading-relaxed uppercase">{errorDesc || 'The security authorization hash lacks verification metrics or is expired.'}</p>
-          <div className="border-t border-slate-800 pt-4">
-            <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest pb-3">Powered by SignPro Solid Cryptography</p>
-            <span className="inline-block px-5 py-2 bg-slate-900 border border-slate-800 text-[10px] text-slate-400 font-extrabold uppercase rounded-lg">
-              Encrypted SSL Gateway
+          <h1 className="text-2xl font-black text-text-main tracking-tight">{errorTitle || 'Approval Link Issue'}</h1>
+          <p className="text-sm font-medium text-text-muted leading-relaxed">{errorDesc || 'This approval link could not be verified. Please ask our team to send a fresh link.'}</p>
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest pb-3">Xtreme SignPro secure client approval</p>
+            <span className="inline-block px-5 py-2 bg-slate-50 border border-slate-200 text-[10px] text-slate-500 font-extrabold uppercase rounded-lg">
+              Protected link
             </span>
           </div>
         </div>
@@ -426,21 +426,21 @@ export default function PublicApproval() {
     : `Artwork and proof layout approval`;
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 antialiased flex flex-col font-sans">
+    <div className="min-h-screen bg-surface text-text-main antialiased flex flex-col font-sans">
       
       {/* BRANDING NAV BAR (SECURE CLIENT PORTAL VIEW - NO SIDEBAR, NO INTERNAL ACCESSIBLE TABS) */}
-      <nav className="bg-slate-950 text-white px-6 py-4 border-b border-indigo-950/40 flex items-center justify-between shadow-lg">
+      <nav className="bg-white text-text-main px-4 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="p-1.5 px-3 bg-indigo-650 text-[11px] font-black uppercase tracking-wider rounded-lg italic">
-            SignPro Graphics
+          <span className="p-1.5 px-3 bg-brand text-white text-[11px] font-black uppercase tracking-wider rounded-lg">
+            Xtreme SignPro
           </span>
-          <span className="text-xs font-bold text-slate-400 tracking-tight block">Secure Approval Gateway</span>
+          <span className="text-xs font-bold text-text-muted tracking-tight block">Secure Client Approval</span>
         </div>
         
         <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-indigo-400" />
-          <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">
-            256-Bit SSL Secured
+          <ShieldCheck size={14} className="text-emerald-500" />
+          <span className="text-[9px] font-black tracking-widest uppercase text-text-muted">
+            Secure link
           </span>
         </div>
       </nav>
@@ -454,32 +454,32 @@ export default function PublicApproval() {
         {tokenRecord.type === 'quote-approval' && quoteData && (
           <div className="space-y-6 animate-in fade-in duration-300">
             
-            <div className="bg-slate-950 border border-slate-840 rounded-3xl shadow-xl overflow-hidden">
-              <div className="h-1.5 bg-indigo-650 w-full" />
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-xl overflow-hidden">
+              <div className="h-1.5 bg-brand-accent w-full" />
               
               {/* Header metadata */}
-              <div className="p-8 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-950">
+              <div className="p-6 sm:p-8 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="p-1 px-2.5 bg-indigo-950/50 border border-indigo-800 text-indigo-300 text-[9px] font-black uppercase tracking-widest rounded-md">
+                      <span className="p-1 px-2.5 bg-blue-50 border border-blue-100 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-md">
                       Official Quote
                     </span>
-                    <span className="text-xs text-slate-500 font-extrabold uppercase">
+                    <span className="text-xs text-text-muted font-extrabold uppercase">
                       Issued: {quoteData.createdAt ? new Date(quoteData.createdAt).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
-                  <h1 className="text-3xl font-black text-slate-100 tracking-tight uppercase italic leading-none">Estimation {quoteData.quoteNumber}</h1>
-                  <p className="text-xs text-slate-400 font-bold mt-1.5 uppercase">Prepared for Client account approval</p>
+                  <h1 className="text-3xl font-black text-text-main tracking-tight leading-none">Quote {quoteData.quoteNumber}</h1>
+                  <p className="text-sm text-text-muted font-semibold mt-1.5">Prepared for your approval.</p>
                 </div>
 
                 <div className="text-left md:text-right">
-                  <span className="text-[9px] font-black text-slate-500 block uppercase tracking-wider mb-0.5">ESTIMATE GROSS TOTAL</span>
-                  <span className="text-3xl font-black tracking-tighter text-indigo-400 italic">
+                  <span className="text-[9px] font-black text-text-muted block uppercase tracking-wider mb-0.5">Quote total</span>
+                  <span className="text-3xl font-black tracking-tighter text-brand-accent">
                     {quoteData.total ? formatZAR(quoteData.total) : 'R 0.00'}
                   </span>
                   <div className="mt-1.5">
-                    <span className="text-[9px] text-slate-400 font-bold bg-slate-900 px-3 py-1 rounded-lg border border-slate-800 uppercase">
-                      Estimator code: {quoteData.status}
+                    <span className="text-[9px] text-text-muted font-bold bg-slate-50 px-3 py-1 rounded-lg border border-slate-200 uppercase">
+                      Status: {quoteData.status}
                     </span>
                   </div>
                 </div>

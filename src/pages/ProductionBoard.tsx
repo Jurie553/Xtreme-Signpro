@@ -121,8 +121,8 @@ export default function ProductionBoard() {
     <div className="flex flex-col gap-6 h-full overflow-hidden animate-in fade-in duration-700">
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="flex flex-col">
-          <h2 className="text-4xl font-black text-text-main tracking-tighter uppercase italic leading-none font-serif">Production Grid</h2>
-          <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-3">Active factory floor monitoring</p>
+          <h2 className="page-title">Production Board</h2>
+          <p className="page-subtitle mt-1">Move jobs between departments, watch due dates, and keep production flowing.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-4">

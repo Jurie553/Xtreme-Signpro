@@ -160,15 +160,15 @@ export default function Jobs() {
     <div className="flex flex-col gap-10 animate-in fade-in duration-700">
       <header className="flex items-center justify-between">
         <div>
-          <h2 className="text-4xl font-black text-text-main tracking-tighter uppercase italic font-serif">Production Registry</h2>
-          <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-2">Historical and active job pipeline</p>
+          <h2 className="page-title">Jobcards</h2>
+          <p className="page-subtitle mt-1">Track production details, deadlines, artwork approvals, and job status.</p>
         </div>
         <button 
           onClick={() => { setEditingJob(null); setIsModalOpen(true); }}
           className="px-8 py-4 bg-brand text-white rounded-3xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-100 hover:-translate-y-1 transition-all flex items-center gap-3"
         >
           <Plus size={18} strokeWidth={3} />
-          Create Direct Job
+          New Jobcard
         </button>
       </header>
 
@@ -215,7 +215,7 @@ export default function Jobs() {
                   className="w-full px-5 py-3 bg-paper border border-border rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-brand-accent/20"
                 />
               </div>
-              <span className="text-text-light font-black">→</span>
+              <span className="text-text-light font-black">to</span>
               <div className="flex-1">
                 <input 
                   type="date" 
@@ -241,7 +241,7 @@ export default function Jobs() {
                   className="w-full px-5 py-3 bg-paper border border-border rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-brand-accent/20"
                 />
               </div>
-              <span className="text-text-light font-black">→</span>
+              <span className="text-text-light font-black">to</span>
               <div className="flex-1">
                 <input 
                   type="date" 
@@ -265,13 +265,13 @@ export default function Jobs() {
                   className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em] cursor-pointer hover:text-brand-accent transition-colors"
                   onClick={() => toggleSort('jobNumber')}
                 >
-                  <div className="flex items-center">Identity <SortIcon field="jobNumber" /></div>
+                  <div className="flex items-center">Job # <SortIcon field="jobNumber" /></div>
                 </th>
                 <th 
                   className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em] cursor-pointer hover:text-brand-accent transition-colors"
                   onClick={() => toggleSort('clientName')}
                 >
-                  <div className="flex items-center">Workflow Item <SortIcon field="clientName" /></div>
+                  <div className="flex items-center">Client & Product <SortIcon field="clientName" /></div>
                 </th>
                 <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Dept</th>
                 <th 
@@ -521,8 +521,8 @@ export default function Jobs() {
                     <div className="w-24 h-24 bg-surface text-text-light rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 shadow-inner border border-border/50 group hover:scale-110 transition-transform duration-700">
                       <AlertTriangle size={40} className="group-hover:rotate-12 transition-transform" />
                     </div>
-                    <p className="text-xl font-black text-text-main tracking-tighter uppercase italic font-serif">No Matches Found</p>
-                    <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-2">Adjust your parameters or reset the matrix</p>
+                    <p className="text-xl font-black text-text-main tracking-tighter">No jobcards found</p>
+                    <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-2">Adjust filters or create a new jobcard</p>
                     <button 
                       onClick={() => {
                         setCreatedStart(''); setCreatedEnd('');
@@ -531,7 +531,7 @@ export default function Jobs() {
                       }}
                       className="mt-8 px-8 py-4 bg-brand-accent text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-3xl hover:shadow-xl hover:shadow-brand-accent/20 transition-all"
                     >
-                      Reset Subsystems
+                      Reset Filters
                     </button>
                   </td>
                 </tr>
@@ -577,4 +577,3 @@ export default function Jobs() {
     </div>
   );
 }
-

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, AlertTriangle, Package, Warehouse } from 'lucide-react';
+import { Search, Plus, Package } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { useCollection } from '../lib/firestoreService';
 import { Material } from '../types';
@@ -97,13 +97,13 @@ export default function Inventory() {
   return (
     <div className="flex flex-col gap-8 animate-in fade-in duration-700">
       <header className="flex flex-col">
-        <h2 className="text-4xl font-black text-text-main tracking-tighter uppercase italic">Inventory Intelligence</h2>
-        <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-2">Real-time substrate monitoring & stock control</p>
+        <h2 className="page-title">Inventory</h2>
+        <p className="page-subtitle mt-1">Track substrates, media, stock levels, reorder warnings, and inventory value.</p>
       </header>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="flex bg-paper p-1 rounded-2xl border border-border/50 shadow-sm">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex bg-paper p-1 rounded-2xl border border-border/50 shadow-sm w-full md:w-auto overflow-x-auto">
             <button 
               onClick={() => setActiveTab('stock')}
               className={cn(
@@ -123,7 +123,7 @@ export default function Inventory() {
               Movement History
             </button>
           </div>
-          <div className="relative group w-80">
+          <div className="relative group w-full md:w-80">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-light group-focus-within:text-brand transition-colors" size={18} />
             <input 
               type="text" 
@@ -136,16 +136,16 @@ export default function Inventory() {
         </div>
         <button 
           onClick={() => navigate('/materials')}
-          className="bg-brand text-white px-10 py-3 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:shadow-xl hover:shadow-brand/20 transition-all flex items-center gap-3 active:scale-95"
+          className="btn-primary flex items-center justify-center gap-3"
         >
           <Plus size={18} />
           Add Inventory Item
         </button>
       </div>
 
-      <div className="card-minimal p-0 overflow-hidden relative">
+      <div className="table-shell overflow-x-auto relative">
         <div className="absolute inset-0 grid-structure opacity-[0.012] pointer-events-none" />
-        <table className="w-full text-left">
+        <table className="w-full text-left min-w-[1000px]">
           <thead className="bg-surface/50 border-b border-border/30">
             <tr>
               <th className="px-8 py-6 text-[9px] font-black text-text-light uppercase tracking-widest">Substrate Entity</th>

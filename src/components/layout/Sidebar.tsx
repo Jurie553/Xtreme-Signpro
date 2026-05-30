@@ -78,8 +78,8 @@ const navItems = [
 ];
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = React.useState(true);
-  const [openSubmenus, setOpenSubmenus] = React.useState<string[]>(['/inventory-group', '/settings-group', '/procurement-group']);
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [openSubmenus, setOpenSubmenus] = React.useState<string[]>(['/inventory-group', '/procurement-group']);
   const { pathname } = useLocation();
 
   const toggleSubmenu = (path: string) => {
@@ -90,22 +90,22 @@ export function Sidebar() {
 
   return (
     <aside className={cn(
-      "bg-white border-r border-slate-200 flex flex-col h-screen transition-all duration-300 relative z-20 shadow-sm",
+      "bg-brand text-white flex flex-col h-screen transition-all duration-300 relative z-20 shadow-xl shadow-slate-950/10",
       collapsed ? "w-20" : "w-72"
     )}>
-      <div className="p-6 flex items-center gap-3 border-b border-slate-100">
-        <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center text-white shrink-0 shadow-md">
-          <span className="font-bold text-sm tracking-tight">SP</span>
+      <div className="p-5 flex items-center gap-3 border-b border-white/10">
+        <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center text-brand shrink-0 shadow-md">
+          <span className="font-black text-sm tracking-tight">XS</span>
         </div>
         {!collapsed && (
           <div className="flex flex-col">
-            <h1 className="font-bold text-lg leading-none text-slate-900 tracking-tight">SignPro</h1>
-            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest mt-0.5">Corporate ERP</span>
+            <h1 className="font-black text-lg leading-none text-white tracking-tight">Xtreme SignPro</h1>
+            <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest mt-1">Print & Signage Hub</span>
           </div>
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 space-y-1 py-4">
+      <nav className="flex-1 overflow-y-auto px-3 space-y-1 py-4 no-scrollbar">
         {navItems.map((item) => {
           const hasChildren = item.children && item.children.length > 0;
           const isSubmenuOpen = openSubmenus.includes(item.path);
@@ -118,23 +118,23 @@ export function Sidebar() {
                 <button
                   onClick={() => !collapsed && toggleSubmenu(item.path)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 transition-colors rounded-xl font-medium text-xs",
+                    "w-full flex items-center gap-3 px-3 py-2.5 transition-colors rounded-xl font-bold text-sm",
                     isChildActive 
-                      ? "text-brand-accent bg-brand-accent/5 font-semibold" 
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      ? "text-white bg-white/12 shadow-sm" 
+                      : "text-slate-300 hover:text-white hover:bg-white/8"
                   )}
                 >
-                  <item.icon size={16} strokeWidth={2.2} className={cn("shrink-0", isChildActive && "text-brand-accent")} />
+                  <item.icon size={17} strokeWidth={2.2} className={cn("shrink-0", isChildActive && "text-creative")} />
                   {!collapsed && (
                     <>
-                      <span className="flex-1 text-left tracking-wide font-bold">{item.label}</span>
-                      <ChevronDown size={12} className={cn("transition-transform duration-300 text-slate-400", isSubmenuOpen && "rotate-180")} />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      <ChevronDown size={13} className={cn("transition-transform duration-300 text-slate-400", isSubmenuOpen && "rotate-180")} />
                     </>
                   )}
                 </button>
                 
                 {!collapsed && isSubmenuOpen && (
-                  <div className="pl-6 space-y-0.5">
+                  <div className="pl-6 space-y-0.5 py-1">
                     {item.children?.map((child) => {
                       const isActive = pathname === child.path;
                       return (
@@ -142,14 +142,14 @@ export function Sidebar() {
                           key={child.path}
                           to={child.path}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2 transition-colors rounded-xl font-medium text-[11px]",
+                            "flex items-center gap-3 px-3 py-2 transition-colors rounded-xl font-semibold text-xs",
                             isActive 
-                              ? "text-brand-accent bg-brand-accent/5 font-bold" 
-                              : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                              ? "text-white bg-white/12" 
+                              : "text-slate-400 hover:text-white hover:bg-white/8"
                           )}
                         >
-                          <child.icon size={12} strokeWidth={2.2} className={cn("shrink-0", isActive ? "text-brand-accent" : "text-slate-400")} />
-                          <span className="uppercase tracking-wider">{child.label}</span>
+                          <child.icon size={13} strokeWidth={2.2} className={cn("shrink-0", isActive ? "text-creative" : "text-slate-500")} />
+                          <span>{child.label}</span>
                         </NavLink>
                       );
                     })}
@@ -164,26 +164,26 @@ export function Sidebar() {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 transition-colors rounded-xl font-medium text-xs",
+                "flex items-center gap-3 px-3 py-2.5 transition-colors rounded-xl font-bold text-sm",
                 isItemActive 
-                  ? "text-brand-accent bg-brand-accent/5 font-bold" 
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  ? "text-white bg-white/12 shadow-sm" 
+                  : "text-slate-300 hover:text-white hover:bg-white/8"
               )}
             >
-              <item.icon size={16} strokeWidth={2.2} className={cn("shrink-0", isItemActive && "text-brand-accent")} />
-              {!collapsed && <span className="tracking-wide font-bold">{item.label}</span>}
+              <item.icon size={17} strokeWidth={2.2} className={cn("shrink-0", isItemActive && "text-creative")} />
+              {!collapsed && <span>{item.label}</span>}
             </NavLink>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-100/60 text-slate-400">
+      <div className="p-4 border-t border-white/10 text-slate-400">
         {!collapsed && (
-          <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+          <div className="bg-white/8 p-3 rounded-xl border border-white/10">
             <h4 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">System Status</h4>
             <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)] animate-pulse" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">Operational</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-200">Operational</span>
             </div>
           </div>
         )}
@@ -191,7 +191,7 @@ export function Sidebar() {
 
       <button 
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-24 bg-white border border-slate-100 shadow-sm rounded-full p-1.5 text-slate-400 hover:text-brand-accent hover:border-brand-accent/20 transition-all duration-350 z-30 select-none"
+        className="absolute -right-3 top-24 bg-white border border-slate-200 shadow-sm rounded-full p-1.5 text-slate-500 hover:text-brand-accent hover:border-brand-accent/30 transition-all duration-300 z-30 select-none"
       >
         <ChevronLeft size={11} strokeWidth={2.5} className={cn("transition-transform duration-300", collapsed && "rotate-180")} />
       </button>

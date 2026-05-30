@@ -164,7 +164,7 @@ export default function Quotes() {
         >
           <div className="absolute inset-0 grid-structure opacity-[0.03] pointer-events-none" />
           <div className="relative z-10">
-            <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mb-2">Total Pipeline</p>
+            <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mb-2">Total Quote Value</p>
             <h3 className="text-3xl font-black text-text-main tracking-tighter tabular-nums italic font-serif">R{stats.total.toLocaleString()}</h3>
           </div>
           <div className="w-14 h-14 bg-brand-accent/5 rounded-[1.5rem] flex items-center justify-center text-brand-accent group-hover:scale-110 transition-all relative z-10 shadow-sm border border-brand-accent/10">
@@ -180,7 +180,7 @@ export default function Quotes() {
         >
           <div className="absolute inset-0 grid-structure opacity-[0.03] pointer-events-none" />
           <div className="relative z-10">
-            <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mb-2">Revenue Realized</p>
+            <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mb-2">Accepted Revenue</p>
             <h3 className="text-3xl font-black text-emerald-500 tracking-tighter tabular-nums italic font-serif">R{stats.accepted.toLocaleString()}</h3>
           </div>
           <div className="w-14 h-14 bg-emerald-50 rounded-[1.5rem] flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-all relative z-10 shadow-sm border border-emerald-100">
@@ -196,7 +196,7 @@ export default function Quotes() {
         >
           <div className="absolute inset-0 grid-structure opacity-[0.03] pointer-events-none" />
           <div className="relative z-10">
-            <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mb-2">Active Proposals</p>
+            <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mb-2">Pending Quotes</p>
             <h3 className="text-3xl font-black text-brand tracking-tighter tabular-nums italic font-serif">{stats.pending} Units</h3>
           </div>
           <div className="w-14 h-14 bg-blue-50 rounded-[1.5rem] flex items-center justify-center text-brand group-hover:scale-110 transition-all relative z-10 shadow-sm border border-blue-100">
@@ -213,7 +213,7 @@ export default function Quotes() {
               type="text" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter sale pipeline..." 
+              placeholder="Search quotes, clients, or status..." 
               className="w-full pl-14 pr-6 py-4 bg-paper border border-border/80 rounded-3xl text-[11px] font-black uppercase tracking-[0.05em] focus:outline-none focus:ring-[8px] focus:ring-brand-accent/5 focus:border-brand-accent/40 transition-all shadow-sm"
             />
           </div>
@@ -235,7 +235,7 @@ export default function Quotes() {
               )}
             >
               <Filter size={18} />
-              {statusFilter ? `Status: ${statusFilter}` : 'Matrix Filter'}
+              {statusFilter ? `Status: ${statusFilter}` : 'Filter Status'}
             </button>
             {statusFilter && (
               <button 
@@ -261,7 +261,7 @@ export default function Quotes() {
           <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center transition-transform group-hover:rotate-90">
             <Plus size={16} strokeWidth={3} />
           </div>
-          <span className="uppercase tracking-[0.2em] text-xs font-black">Generate Quote</span>
+          <span className="uppercase tracking-[0.2em] text-xs font-black">New Quote</span>
         </button>
       </div>
 
@@ -271,15 +271,15 @@ export default function Quotes() {
           <table className="w-full text-left min-w-[1200px]">
             <thead>
               <tr className="bg-surface/50 border-b border-border/50">
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Registry ID</th>
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Entity Detail</th>
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Scope</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Quote #</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Client</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Items</th>
                 <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Priority</th>
                 <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Log Date</th>
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Gross Val</th>
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Yield</th>
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.3em]">State</th>
-                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em] text-right">Ops</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Total</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em]">Profit</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.3em]">Status</th>
+                <th className="px-10 py-6 text-[9px] font-black text-text-light uppercase tracking-[0.25em] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30">
@@ -418,13 +418,13 @@ export default function Quotes() {
                     <div className="w-24 h-24 bg-surface text-text-light rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 shadow-inner border border-border/50 group hover:scale-110 transition-transform duration-700">
                       <AlertCircle size={40} className="group-hover:rotate-12 transition-transform" />
                     </div>
-                    <p className="text-xl font-black text-text-main tracking-tighter uppercase italic font-serif">Registry Empty</p>
-                    <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-2">Awaiting system initialization or user input</p>
+                      <p className="text-xl font-black text-text-main tracking-tighter">No quotes found</p>
+                    <p className="text-[10px] font-black text-text-light uppercase tracking-[0.3em] mt-2">Create a quote or adjust your filters</p>
                     <button 
                       onClick={() => setIsModalOpen(true)}
                       className="mt-8 px-8 py-4 bg-brand-accent text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-3xl hover:shadow-xl hover:shadow-brand-accent/20 transition-all"
                     >
-                      Initialize First Record
+                      Create First Quote
                     </button>
                   </td>
                 </tr>
