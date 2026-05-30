@@ -4,7 +4,7 @@
 
 Use Cloud Run for the full app because the project has a custom Express server in `server.ts` for Zoho Books OAuth and API routes.
 
-## Build Settings
+## Cloud Run Build Settings
 
 - Install command: `npm install`
 - Build command: `npm run build`
@@ -65,6 +65,16 @@ Zoho API calls that require `ZOHO_CLIENT_SECRET` must run on the backend/serverl
 
 ## Vercel Compatibility
 
-The static frontend can deploy to Vercel with `npm run build` and output directory `dist`. The existing Zoho Express API will not be available on Vercel unless it is converted into Vercel functions under an `api/` directory.
+The static frontend can deploy to Vercel with the Vite framework preset.
+
+- Framework preset: `Vite`
+- Install command: `npm install`
+- Build command: `npm run build:vercel`
+- Output directory: `dist`
+- Vercel config file: `vercel.json`
+
+`vercel.json` intentionally does not declare any `functions` runtime. The project has no `api/` function directory, and the previous function runtime configuration caused Vercel to fail with `Function Runtimes must have a valid version`.
+
+The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Zoho OAuth, client sync, invoice push, and payment pull require Cloud Run or a future conversion of the Express routes into Vercel serverless functions under an `api/` directory.
 
 For full end-to-end operation with Zoho, use Cloud Run or migrate the backend routes first.
