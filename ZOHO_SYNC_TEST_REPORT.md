@@ -23,6 +23,24 @@ Verification update on 2026-06-01:
 - Local serverless handler invocation confirmed `/api/zoho/auth-url` returns valid JSON for missing env.
 - Local serverless handler invocation confirmed `/api/zoho/readiness` returns valid JSON with friendly Firebase/Zoho configuration warnings.
 
+Routing update on 2026-06-01:
+
+- Added explicit Vercel function files for key Zoho routes instead of relying only on the catch-all route:
+  - `api/zoho/config.ts`
+  - `api/zoho/readiness.ts`
+  - `api/zoho/auth-url.ts`
+  - `api/zoho/callback.ts`
+  - `api/zoho/test-connection.ts`
+  - `api/zoho/sync-clients.ts`
+  - `api/zoho/sync-products.ts`
+  - `api/zoho/push-quote.ts`
+  - `api/zoho/push-invoice.ts`
+  - `api/zoho/pull-payments.ts`
+  - `api/zoho/token.ts`
+  - `api/zoho/disconnect.ts`
+- These explicit files delegate into the shared Zoho serverless implementation in `api/zoho/[...path].ts`.
+- Local explicit route invocation confirmed `/api/zoho/config`, `/api/zoho/readiness`, and `/api/zoho/auth-url` return valid JSON.
+
 ## What Passed
 
 - `npm run typecheck` passed.
@@ -142,6 +160,20 @@ Run these from the deployed app at `Settings -> Zoho Books Integration -> Operat
 8. Pull Payment Status
 
 After each step, check the Zoho audit log table and Firestore `zoho_sync_logs`.
+
+## Manual Vercel API Test
+
+After deploying this version to Vercel, open these URLs directly in the browser and confirm each page displays JSON, not the app HTML page and not an empty response:
+
+- `https://xtreme-signpro-n75zv0vsb-jurie553s-projects.vercel.app/api/zoho/config`
+- `https://xtreme-signpro-n75zv0vsb-jurie553s-projects.vercel.app/api/zoho/readiness`
+- `https://xtreme-signpro-n75zv0vsb-jurie553s-projects.vercel.app/api/zoho/auth-url`
+
+Expected behavior:
+
+- Missing env vars should return JSON with `success: false` and a friendly `error`.
+- Configured OAuth env vars should make `/api/zoho/auth-url` return `success: true` with `authUrl`.
+- The response content should begin with `{`, not `<!doctype html>`.
 
 ## Zoho Validation Requirements Found
 

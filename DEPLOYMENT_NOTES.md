@@ -79,7 +79,7 @@ Vercel deployment works for the app UI, Firebase client-side screens, routing, q
 
 The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Vercel uses `api/zoho/[...path].ts` instead. Keep both implementations aligned if future Zoho behavior changes.
 
-The Vercel function implements:
+The Vercel implementation uses explicit function files for the main Zoho routes and delegates shared logic to `api/zoho/[...path].ts`. It implements:
 
 - `/api/zoho/config`
 - `/api/zoho/auth-url`

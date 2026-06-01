@@ -623,13 +623,17 @@ const handlers: Record<string, (req: any, res: any) => Promise<any>> = {
   }
 };
 
-export default async function handler(req: any, res: any) {
+export async function handleZohoRequest(req: any, res: any, pathOverride?: string) {
   try {
-    const path = getPath(req);
+    const path = pathOverride || getPath(req);
     const route = handlers[path];
     if (!route) return json(res, { success: false, error: `Zoho API route not found: /api/zoho/${path}` }, 404);
     return await route(req, res);
   } catch (err) {
     return json(res, { success: false, error: safeError(err) });
   }
+}
+
+export default async function handler(req: any, res: any) {
+  return handleZohoRequest(req, res);
 }
