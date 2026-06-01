@@ -12,6 +12,17 @@ Update on 2026-06-01: Vercel JSON parsing failures were fixed so the Zoho settin
 
 Update on 2026-06-01: The Connect OAuth flow was hardened so an empty, HTML, or invalid `/api/zoho/auth-url` response cannot trigger `response.json()` / `Unexpected end of JSON input` errors.
 
+Update on 2026-06-01: The Vercel `/api/zoho/*` fallback was replaced with working serverless Zoho API routes for OAuth, readiness, sync, exports, and payment pull.
+
+Verification update on 2026-06-01:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npm run build` passed.
+- `npm run build:vercel` passed.
+- Local serverless handler invocation confirmed `/api/zoho/auth-url` returns valid JSON for missing env.
+- Local serverless handler invocation confirmed `/api/zoho/readiness` returns valid JSON with friendly Firebase/Zoho configuration warnings.
+
 ## What Passed
 
 - `npm run typecheck` passed.
@@ -27,6 +38,17 @@ Update on 2026-06-01: The Connect OAuth flow was hardened so an empty, HTML, or 
 - `/api/zoho/auth-url` now returns `{ success: true, authUrl, url }` when OAuth env vars are present.
 - `/api/zoho/auth-url` returns a safe JSON error when required OAuth env vars are missing.
 - Generated OAuth URLs include `client_id`, `redirect_uri`, `response_type=code`, `access_type=offline`, `prompt=consent`, and Zoho Books scopes.
+- Vercel serverless routes now exist for:
+  - `/api/zoho/config`
+  - `/api/zoho/auth-url`
+  - `/api/zoho/callback`
+  - `/api/zoho/readiness`
+  - `/api/zoho/test-connection`
+  - `/api/zoho/sync-clients`
+  - `/api/zoho/sync-products`
+  - `/api/zoho/push-quote`
+  - `/api/zoho/push-invoice`
+  - `/api/zoho/pull-payments`
 - OAuth URL generation uses the configured Zoho Accounts domain, offline access, consent prompt, and the backend callback redirect URI.
 - Callback handling remains at `/api/zoho/callback`.
 - Access tokens, refresh tokens, and saved client secret are stored in `zoho_private/state`; `settings/zoho` only stores public connection/config metadata.
@@ -81,7 +103,7 @@ Fixes added:
 - `api/zoho/[...path].ts` can generate the OAuth URL on Vercel from `ZOHO_CLIENT_ID`, `ZOHO_REDIRECT_URI`, and `ZOHO_ACCOUNTS_URL` without exposing `ZOHO_CLIENT_SECRET`.
 - `vercel.json` excludes `/api/*` from the SPA rewrite.
 
-This fallback does not perform live Zoho sync. It only prevents crashes and explains the deployment limitation.
+The previous fallback has been replaced by a real Vercel serverless implementation. Live testing is still required against the deployed Vercel environment and the actual Zoho organization.
 
 ## OAuth Redirect Flow Fix
 
@@ -165,8 +187,10 @@ Deployment still needs Firestore permission verification for:
   - Added backend-unavailable warning and disables live sync buttons when Vercel does not provide the backend.
 
 - `api/zoho/[...path].ts`
-  - Added Vercel JSON fallback for `/api/zoho/*`.
-  - Added `/api/zoho/auth-url` fallback behavior that returns a generated OAuth URL when safe public OAuth env vars are present.
+  - Replaced Vercel JSON fallback with working serverless Zoho API handlers.
+  - Added OAuth URL generation and callback token exchange.
+  - Added secure token storage in `zoho_private/state`.
+  - Added readiness, test connection, client sync, product sync, estimate export, invoice export, payment pull, token status, and disconnect handlers.
 
 - `vercel.json`
   - Updated SPA rewrite so `/api/*` is not rewritten to `index.html`.
@@ -192,5 +216,6 @@ Deployment still needs Firestore permission verification for:
 
 - Full live readiness cannot be proven from this local workspace because deployment-only environment variables are not visible here.
 - Zoho organization-specific validation can still reject contacts, items, estimates, or invoices if that Zoho Books organization requires extra tax/account fields.
-- The Vercel fallback prevents JSON parse crashes but does not replace the Cloud Run Express backend.
+- Vercel callback returns JSON after token exchange. After OAuth succeeds, close the callback tab and run `Check Config` or `Test Connection` in the Zoho settings panel.
+- The Vercel serverless implementation uses the configured Firebase web project values. Firestore rules must allow the serverless runtime to read/write the required collections, or a future Firebase Admin service-account migration will be needed.
 - Build still shows Vite's large bundle warning; it is not a build failure.

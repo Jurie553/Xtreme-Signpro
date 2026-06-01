@@ -2,7 +2,9 @@
 
 ## Recommended Deployment
 
-Use Cloud Run for the full app because the project has a custom Express server in `server.ts` for Zoho Books OAuth and API routes.
+Vercel can now run the app UI and the Zoho serverless API routes under `/api/zoho/*`.
+
+Cloud Run remains supported for the custom Express server in `server.ts`, but it is no longer the only option for Zoho OAuth and sync.
 
 ## Cloud Run Build Settings
 
@@ -65,7 +67,7 @@ Zoho API calls that require `ZOHO_CLIENT_SECRET` must run on the backend/serverl
 
 ## Vercel Compatibility
 
-The static frontend can deploy to Vercel with the Vite framework preset.
+The frontend and Zoho serverless API can deploy to Vercel with the Vite framework preset.
 
 - Framework preset: `Vite`
 - Install command: `npm install`
@@ -73,24 +75,43 @@ The static frontend can deploy to Vercel with the Vite framework preset.
 - Output directory: `dist`
 - Vercel config file: `vercel.json` rewrites non-API routes to `index.html` for the SPA and leaves `/api/*` available for serverless functions.
 
-Vercel frontend-only deployment works for the app UI, Firebase client-side screens, routing, quotes, jobcards, products, inventory, approvals, and PDFs that do not require the custom Express server.
+Vercel deployment works for the app UI, Firebase client-side screens, routing, quotes, jobcards, products, inventory, approvals, PDFs, and the Zoho serverless routes in `api/zoho/[...path].ts`.
 
-The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Zoho OAuth, client sync, product sync, estimate export, invoice export, and payment pull require Cloud Run unless the Express routes are fully converted into Vercel serverless functions under the `api/` directory.
+The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Vercel uses `api/zoho/[...path].ts` instead. Keep both implementations aligned if future Zoho behavior changes.
 
-This repo includes a lightweight Vercel fallback at `api/zoho/[...path].ts`. It intentionally returns JSON with a friendly `503` message instead of allowing Vercel to return the Vite HTML page for `/api/zoho/*`. That prevents frontend JSON parsing crashes, but it does not perform live Zoho sync.
+The Vercel function implements:
 
-For full end-to-end operation with Zoho, use Cloud Run or migrate the backend routes first.
+- `/api/zoho/config`
+- `/api/zoho/auth-url`
+- `/api/zoho/callback`
+- `/api/zoho/readiness`
+- `/api/zoho/test-connection`
+- `/api/zoho/sync-clients`
+- `/api/zoho/sync-products`
+- `/api/zoho/push-quote`
+- `/api/zoho/push-invoice`
+- `/api/zoho/pull-payments`
+- `/api/zoho/token`
+- `/api/zoho/disconnect`
+
+## Vercel Zoho Requirements
+
+For Zoho OAuth and sync on Vercel, set these variables in Vercel Project Settings:
+
+- `ZOHO_CLIENT_ID`
+- `ZOHO_CLIENT_SECRET`
+- `ZOHO_ORGANIZATION_ID`
+- `ZOHO_REDIRECT_URI`
+- `ZOHO_ACCOUNTS_URL`
+- `ZOHO_BOOKS_API_URL`
+- Firebase `VITE_FIREBASE_*` variables
+
+Set `ZOHO_REDIRECT_URI` to the exact deployed Vercel callback URL, for example:
+
+`https://your-vercel-domain.vercel.app/api/zoho/callback`
+
+The callback route returns JSON after saving tokens. After Zoho authorization succeeds, close the callback tab and return to Settings > Zoho Books Integration, then click `Check Config` or `Test Connection`.
 
 ## Vercel JSON Parse Error Fix
 
-If the app shows this message:
-
-`This API endpoint is not available on this deployment. Zoho backend routes may need Cloud Run or Vercel serverless functions.`
-
-then the frontend is working, but the live Zoho backend is not available in that Vercel deployment.
-
-Use one of these deployment choices:
-
-1. Deploy the full app to Cloud Run using `npm run build` and `npm start`.
-2. Keep Vercel as frontend-only and do not use live Zoho sync there.
-3. Convert the required Express endpoints in `server.ts` into real Vercel functions under `api/`.
+The frontend uses safe JSON handling for Zoho calls and the Vercel API route always returns JSON. Empty, HTML, or missing route responses should show a friendly message instead of crashing.
