@@ -100,6 +100,8 @@ export default function ZohoSettingsTab() {
   const [syncingClients, setSyncingClients] = useState(false);
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [pullingPayments, setPullingPayments] = useState(false);
+  const [checkingReadiness, setCheckingReadiness] = useState(false);
+  const [readinessResult, setReadinessResult] = useState<any | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   
   const [activeSubTab, setActiveSubTab] = useState<'config' | 'operations' | 'transactions' | 'logs'>('config');
@@ -453,6 +455,54 @@ export default function ZohoSettingsTab() {
     }
   };
 
+  const handleCheckConfig = async () => {
+    setCheckingReadiness(true);
+    setDebugLog(prev => ({
+      ...prev,
+      frontendRoute: '/api/zoho/readiness',
+      lastResponseStatus: 'Checking...'
+    }));
+
+    try {
+      const response = await fetch('/api/zoho/readiness');
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        throw new Error("Expected JSON from readiness check but received a webpage. First 200: " + text.slice(0, 200));
+      }
+
+      const data = await response.json();
+      setReadinessResult(data);
+      setDebugLog(prev => ({
+        ...prev,
+        lastResponseStatus: response.status.toString(),
+        hasRefreshToken: data.tokens?.hasRefreshToken ? 'Yes (stored securely on the server)' : 'Missing',
+        orgIdFound: data.config?.organizationIdPresent ? 'Yes' : 'Missing',
+        lastError: data.success ? 'None' : (data.error || 'Readiness check failed')
+      }));
+
+      if (!data.success) {
+        throw new Error(data.error || 'Readiness check failed.');
+      }
+
+      if (data.overallReady) {
+        toast.success('Zoho readiness check passed. OAuth token, config, domains, and Firestore checks look ready.');
+      } else {
+        toast.warning('Zoho readiness check completed. Some items still need live setup or attention.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Zoho readiness check failed: ' + err.message);
+      setDebugLog(prev => ({
+        ...prev,
+        lastResponseStatus: 'Error',
+        lastError: err.message
+      }));
+    } finally {
+      setCheckingReadiness(false);
+    }
+  };
+
   // Sync clients with Zoho Books
   const handleSyncClients = async () => {
     setSyncingClients(true);
@@ -652,6 +702,28 @@ export default function ZohoSettingsTab() {
     } finally {
       setPullingPayments(false);
     }
+  };
+
+  const handleExportOneTestEstimate = async () => {
+    const quote = erpQuotes.find(q => String((q as any).status || '').toLowerCase() === 'accepted');
+    if (!quote) {
+      toast.warning('No accepted quote is available to export. Accept a quote first, then run this test.');
+      return;
+    }
+    await handlePushQuoteToZoho(quote);
+  };
+
+  const handleExportOneTestInvoice = async () => {
+    const job = erpJobs.find(j => {
+      const status = String((j as any).status || '').toLowerCase();
+      const stage = String((j as any).stage || '').toLowerCase();
+      return status === 'completed' || stage === 'completed' || stage === 'delivered' || stage === 'ready';
+    });
+    if (!job) {
+      toast.warning('No completed jobcard is available to export. Complete a jobcard first, then run this test.');
+      return;
+    }
+    await handleCreateZohoInvoice(job);
   };
 
   if (loadingSettings) {
@@ -1034,6 +1106,120 @@ export default function ZohoSettingsTab() {
 
         {activeSubTab === 'operations' && (
           <div className="flex flex-col gap-8 animate-in fade-in duration-300">
+            <div className="card-minimal border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/40">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-sm">
+                    <Terminal size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black uppercase text-text-main tracking-tight">Zoho Admin Test Panel</h3>
+                    <p className="text-[10px] text-text-light uppercase tracking-widest max-w-2xl">
+                      Run the full readiness checklist before live syncing customers, items, estimates, invoices, and payment states.
+                    </p>
+                  </div>
+                </div>
+                {readinessResult && (
+                  <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                    readinessResult.overallReady
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}>
+                    {readinessResult.overallReady ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                    {readinessResult.overallReady ? 'Ready' : 'Needs Live Check'}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <button
+                  onClick={handleCheckConfig}
+                  disabled={checkingReadiness}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {checkingReadiness ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye size={13} />}
+                  Check Config
+                </button>
+                <button
+                  onClick={handleConnect}
+                  disabled={isSaving}
+                  className="btn-primary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 size={13} />}
+                  Connect OAuth
+                </button>
+                <button
+                  onClick={handleTestConnection}
+                  disabled={testing}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe size={13} />}
+                  Test Connection
+                </button>
+                <button
+                  onClick={handleSyncClients}
+                  disabled={syncingClients || !settings.connected}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {syncingClients ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck size={13} />}
+                  Sync Clients
+                </button>
+                <button
+                  onClick={handleSyncProducts}
+                  disabled={syncingProducts || !settings.connected}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {syncingProducts ? <Loader2 className="w-3 h-3 animate-spin" /> : <PackageCheck size={13} />}
+                  Sync Products
+                </button>
+                <button
+                  onClick={handleExportOneTestEstimate}
+                  disabled={exportingId !== null || !settings.connected}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {exportingId ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSpreadsheet size={13} />}
+                  Export One Test Estimate
+                </button>
+                <button
+                  onClick={handleExportOneTestInvoice}
+                  disabled={exportingId !== null || !settings.connected}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {exportingId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Receipt size={13} />}
+                  Export One Test Invoice
+                </button>
+                <button
+                  onClick={handlePullPaymentStatuses}
+                  disabled={pullingPayments || !settings.connected}
+                  className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
+                >
+                  {pullingPayments ? <Loader2 className="w-3 h-3 animate-spin" /> : <DollarSign size={13} />}
+                  Pull Payment Status
+                </button>
+              </div>
+
+              {readinessResult && (
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-[8px] uppercase tracking-widest font-black text-text-light mb-1">Redirect URI</p>
+                    <p className="font-mono text-[10px] text-slate-700 break-all">{readinessResult.config?.redirectUri || 'Not available'}</p>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-[8px] uppercase tracking-widest font-black text-text-light mb-1">Zoho Domains</p>
+                    <p className="font-mono text-[10px] text-slate-700 break-all">
+                      {readinessResult.config?.accountsDomain || 'accounts missing'} / {readinessResult.config?.booksApiDomain || 'api missing'}
+                    </p>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-xl p-4">
+                    <p className="text-[8px] uppercase tracking-widest font-black text-text-light mb-1">Token Store</p>
+                    <p className="font-mono text-[10px] text-slate-700">
+                      {readinessResult.tokens?.storagePath || 'zoho_private/state'} - {readinessResult.tokens?.hasRefreshToken ? 'Refresh token present' : 'OAuth not connected'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="card-minimal">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">

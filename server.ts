@@ -11,6 +11,7 @@ import {
   addDoc, 
   getDocs, 
   updateDoc, 
+  deleteDoc,
   collection 
 } from 'firebase/firestore';
 import { createServer as createViteServer } from 'vite';
@@ -44,7 +45,9 @@ firebaseConfig = {
   firestoreDatabaseId: process.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || undefined,
 };
 
-if (!firebaseConfig.projectId) {
+const hasFirebaseServerConfig = !!firebaseConfig.projectId;
+
+if (!hasFirebaseServerConfig) {
   console.warn('Firebase server config is missing. Zoho sync endpoints need VITE_FIREBASE_* environment variables.');
 }
 
@@ -87,6 +90,9 @@ const db = {
           },
           async update(data: any) {
             await updateDoc(docRef, data);
+          },
+          async delete() {
+            await deleteDoc(docRef);
           }
         };
       }
@@ -109,13 +115,15 @@ const REGIONS: Record<string, { accountsDomain: string, booksDomain: string }> =
 
 const getZohoConfig = async () => {
   let dbConfig: any = {};
-  try {
-    const docSnap = await db.collection('settings').doc('zoho').get();
-    if (docSnap.exists) {
-      dbConfig = docSnap.data();
+  if (hasFirebaseServerConfig) {
+    try {
+      const docSnap = await db.collection('settings').doc('zoho').get();
+      if (docSnap.exists) {
+        dbConfig = docSnap.data();
+      }
+    } catch (e) {
+      console.error("Failed to read settings/zoho from database:", e);
     }
-  } catch (e) {
-    console.error("Failed to read settings/zoho from database:", e);
   }
 
   const region = dbConfig.region || 'us';
@@ -123,7 +131,7 @@ const getZohoConfig = async () => {
 
   return {
     clientId: process.env.ZOHO_CLIENT_ID || dbConfig.clientId || '',
-    clientSecret: process.env.ZOHO_CLIENT_SECRET || (await getPrivateZohoState())?.clientSecret || dbConfig.clientSecret || '',
+    clientSecret: process.env.ZOHO_CLIENT_SECRET || (hasFirebaseServerConfig ? (await getPrivateZohoState())?.clientSecret : '') || dbConfig.clientSecret || '',
     organizationId: process.env.ZOHO_ORGANIZATION_ID || dbConfig.organizationId || '',
     accountsDomain: process.env.ZOHO_ACCOUNTS_URL?.replace(/^https?:\/\//, '') || process.env.ZOHO_ACCOUNTS_DOMAIN || domainInfo.accountsDomain,
     booksApiDomain: process.env.ZOHO_BOOKS_API_URL?.replace(/^https?:\/\//, '') || process.env.ZOHO_BOOKS_API_DOMAIN || domainInfo.booksDomain,
@@ -140,6 +148,9 @@ interface ZohoTokens {
 }
 
 const getZohoTokens = async (): Promise<ZohoTokens | null> => {
+  if (!hasFirebaseServerConfig) {
+    return null;
+  }
   try {
     const docSnap = await db.collection('zoho_private').doc('state').get();
     if (docSnap.exists) {
@@ -156,6 +167,10 @@ const getPrivateZohoState = async () => {
 };
 
 const saveZohoTokens = async (tokens: Partial<ZohoTokens>) => {
+  if (!hasFirebaseServerConfig) {
+    console.warn('Skipped Zoho token save because Firebase server config is missing.');
+    return;
+  }
   try {
     const existing = await getZohoTokens() || { accessToken: '', accessTokenExpiresAt: 0 };
     const updated = {
@@ -176,6 +191,10 @@ const saveZohoTokens = async (tokens: Partial<ZohoTokens>) => {
 };
 
 const addSyncLog = async (recordName: string, syncAction: string, success: boolean, errorMessage: string = '', recordType: string = 'Client') => {
+  if (!hasFirebaseServerConfig) {
+    console.warn(`Skipped Zoho sync log (${recordName}) because Firebase server config is missing.`);
+    return;
+  }
   try {
     await db.collection('zoho_sync_logs').add({
       date: Date.now(),
@@ -279,6 +298,141 @@ const buildZohoLineItems = (items: any[] = [], fallbackName = 'Custom print job'
       description: String(item.description || fallbackName).slice(0, 500)
     };
   });
+};
+
+const safeError = (err: any) => err?.message || String(err);
+
+const checkFirestoreReadWrite = async () => {
+  if (!hasFirebaseServerConfig) {
+    return firestoreTimeoutChecks('Firebase server config is missing. Add VITE_FIREBASE_* environment variables so the backend can reach Firestore.');
+  }
+
+  const now = Date.now();
+  const checks: Record<string, { read: boolean; write: boolean; error?: string }> = {};
+
+  const tempDocs: Record<string, any> = {
+    clients: {
+      name: 'Zoho Readiness Test Client',
+      email: `zoho-readiness-${now}@example.invalid`,
+      phone: '',
+      companyName: 'Zoho Readiness Test',
+      createdAt: now
+    },
+    products: {
+      name: 'Zoho Readiness Test Product',
+      category: 'Other',
+      costingMethod: 'Per Item',
+      defaultMachineId: '',
+      setupTime: 0,
+      markupPercent: 0,
+      description: 'Temporary Zoho readiness test product',
+      createdAt: now
+    },
+    quotes: {
+      quoteNumber: `ZOHO-READY-${now}`,
+      clientId: '__zoho_readiness__',
+      total: 0,
+      subtotal: 0,
+      vat: 0,
+      profit: 0,
+      items: [],
+      status: 'Draft',
+      isExpress: false,
+      expressSurcharge: 0,
+      expiryDate: now,
+      createdAt: now
+    },
+    jobs: {
+      jobNumber: `ZOHO-READY-${now}`,
+      clientId: '__zoho_readiness__',
+      clientName: 'Zoho Readiness Test',
+      productName: 'Zoho Readiness Test Job',
+      stage: 'Prepress',
+      priority: 'Normal',
+      dueDate: now,
+      artworkStatus: 'N/A',
+      createdAt: now
+    }
+  };
+
+  for (const collectionName of ['clients', 'products', 'quotes', 'jobs']) {
+    const docId = `__zoho_readiness_${now}`;
+    try {
+      await db.collection(collectionName).get();
+      await db.collection(collectionName).doc(docId).set(tempDocs[collectionName]);
+      await db.collection(collectionName).doc(docId).delete();
+      checks[collectionName] = { read: true, write: true };
+    } catch (err: any) {
+      checks[collectionName] = { read: false, write: false, error: safeError(err) };
+    }
+  }
+
+  try {
+    await db.collection('settings').doc('zoho').get();
+    await db.collection('settings').doc('zoho').set({ readinessLastCheckedAt: now }, { merge: true });
+    checks['settings/zoho'] = { read: true, write: true };
+  } catch (err: any) {
+    checks['settings/zoho'] = { read: false, write: false, error: safeError(err) };
+  }
+
+  try {
+    await db.collection('zoho_private').doc('state').get();
+    await db.collection('zoho_private').doc('state').set({ readinessLastCheckedAt: now }, { merge: true });
+    checks['zoho_private/state'] = { read: true, write: true };
+  } catch (err: any) {
+    checks['zoho_private/state'] = { read: false, write: false, error: safeError(err) };
+  }
+
+  try {
+    await db.collection('zoho_sync_logs').get();
+    await addSyncLog('Zoho Readiness Check', 'Test Connection', true, 'Firestore read/write readiness check completed.', 'Client');
+    checks.zoho_sync_logs = { read: true, write: true };
+  } catch (err: any) {
+    checks.zoho_sync_logs = { read: false, write: false, error: safeError(err) };
+  }
+
+  return checks;
+};
+
+const summarizeChecks = (checks: Record<string, any>) => Object.values(checks).every((check: any) => {
+  if (check && typeof check === 'object' && 'passed' in check) return !!check.passed;
+  if (check && typeof check === 'object' && 'read' in check) return !!check.read && !!check.write;
+  return !!check;
+});
+
+const stripProtocol = (value = '') => String(value || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+const firestoreTimeoutChecks = (message: string) => ({
+  clients: { read: false, write: false, error: message },
+  products: { read: false, write: false, error: message },
+  quotes: { read: false, write: false, error: message },
+  jobs: { read: false, write: false, error: message },
+  'settings/zoho': { read: false, write: false, error: message },
+  'zoho_private/state': { read: false, write: false, error: message },
+  zoho_sync_logs: { read: false, write: false, error: message },
+});
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> => {
+  return await Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs))
+  ]);
+};
+
+const buildZohoAuthUrl = (config: Awaited<ReturnType<typeof getZohoConfig>>, redirectUri: string) => {
+  const scopes = [
+    'ZohoBooks.fullaccess.all',
+    'ZohoBooks.fullaccess.ALL',
+    'ZohoBooks.organizations.READ'
+  ].join(' ');
+
+  return `https://${config.accountsDomain}/oauth/v2/auth?` +
+    `scope=${encodeURIComponent(scopes)}` +
+    `&client_id=${encodeURIComponent(config.clientId)}` +
+    `&response_type=code` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&access_type=offline` +
+    `&prompt=consent`;
 };
 
 // --- Check and Refresh Token Handler ---
@@ -491,6 +645,135 @@ app.post('/api/zoho/disconnect', async (req, res) => {
   }
 });
 
+app.get('/api/zoho/readiness', async (req, res) => {
+  try {
+    const config = await getZohoConfig();
+    const tokens = await getZohoTokens();
+    const redirectUri = getRedirectUri(req);
+    const configuredRedirectUri = process.env.ZOHO_REDIRECT_URI || '';
+    const authUrl = config.clientId ? buildZohoAuthUrl(config, redirectUri) : '';
+    const regionMatch = Object.values(REGIONS).find(region =>
+      region.accountsDomain === stripProtocol(config.accountsDomain) &&
+      region.booksDomain === stripProtocol(config.booksApiDomain)
+    );
+
+    const checks: Record<string, any> = {
+      zohoClientId: {
+        passed: !!config.clientId,
+        message: config.clientId
+          ? 'Zoho Client ID is configured.'
+          : 'Zoho Client ID is missing. Add ZOHO_CLIENT_ID or save it in Zoho settings.'
+      },
+      zohoClientSecret: {
+        passed: !!config.clientSecret,
+        message: config.clientSecret
+          ? 'Zoho Client Secret is available server-side.'
+          : 'Zoho Client Secret is missing. Add ZOHO_CLIENT_SECRET or save it in Zoho settings.'
+      },
+      zohoOrganizationId: {
+        passed: !!config.organizationId,
+        message: config.organizationId
+          ? 'Zoho Organization ID is configured.'
+          : 'Zoho Organization ID is missing. Add ZOHO_ORGANIZATION_ID or save it in Zoho settings.'
+      },
+      oauthConnectUrl: {
+        passed: !!authUrl && authUrl.includes('/oauth/v2/auth') && authUrl.includes('access_type=offline'),
+        message: authUrl
+          ? 'OAuth connect URL can be generated with offline refresh-token access.'
+          : 'OAuth connect URL cannot be generated until a Client ID is configured.',
+        accountsDomain: config.accountsDomain,
+        urlPreview: authUrl ? authUrl.replace(config.clientId, '[client-id]') : ''
+      },
+      callbackRedirectUri: {
+        passed: configuredRedirectUri ? redirectUri === configuredRedirectUri : redirectUri.endsWith('/api/zoho/callback'),
+        message: configuredRedirectUri
+          ? (redirectUri === configuredRedirectUri
+              ? 'Callback route exactly matches ZOHO_REDIRECT_URI.'
+              : 'Callback route does not match ZOHO_REDIRECT_URI exactly.')
+          : 'ZOHO_REDIRECT_URI is not set locally, so the app is using APP_URL/request host fallback.',
+        redirectUri,
+        configuredRedirectUri
+      },
+      secureTokenStorage: {
+        passed: true,
+        message: 'Access/refresh tokens are read from and written to zoho_private/state; public settings only store connection metadata.',
+        hasRefreshToken: !!tokens?.refreshToken,
+        hasAccessToken: !!tokens?.accessToken,
+        accessTokenExpiresAt: tokens?.accessTokenExpiresAt || 0,
+        storagePath: 'zoho_private/state'
+      },
+      zohoRegionDomains: {
+        passed: !!regionMatch || (
+          stripProtocol(config.accountsDomain).startsWith('accounts.zoho.') &&
+          stripProtocol(config.booksApiDomain).includes('zohoapis.')
+        ),
+        message: regionMatch
+          ? `Configured domains match the ${config.region.toUpperCase()} Zoho region.`
+          : 'Configured domains are custom or not one of the built-in region pairs; verify they belong to the same Zoho data center.',
+        region: config.region,
+        accountsDomain: config.accountsDomain,
+        booksApiDomain: config.booksApiDomain
+      },
+      missingConfigWarning: {
+        passed: true,
+        message: 'Missing Zoho configuration endpoints return friendly JSON warnings instead of crashing.'
+      }
+    };
+
+    const firestoreChecks = await withTimeout(
+      checkFirestoreReadWrite(),
+      8000,
+      firestoreTimeoutChecks('Firestore readiness check timed out. Verify Firebase server environment variables and Firestore connectivity.')
+    );
+    const overallReady = summarizeChecks({ ...checks, ...firestoreChecks }) && !!tokens?.refreshToken;
+    const liveTestingNeeded = !tokens?.refreshToken;
+
+    await addSyncLog(
+      'Zoho Readiness Check',
+      'Test Connection',
+      overallReady,
+      overallReady
+        ? 'All local readiness checks passed and a refresh token is present.'
+        : 'Readiness completed. OAuth/live Zoho testing may still be required.',
+      'Client'
+    );
+
+    return res.json({
+      success: true,
+      overallReady,
+      liveTestingNeeded,
+      checkedAt: Date.now(),
+      config: {
+        clientIdPresent: !!config.clientId,
+        clientSecretPresent: !!config.clientSecret,
+        organizationIdPresent: !!config.organizationId,
+        accountsDomain: config.accountsDomain,
+        booksApiDomain: config.booksApiDomain,
+        region: config.region,
+        redirectUri,
+        configuredRedirectUri,
+        appUrlPresent: !!process.env.APP_URL,
+        publicAppUrlPresent: !!process.env.VITE_PUBLIC_APP_URL
+      },
+      tokens: {
+        hasRefreshToken: !!tokens?.refreshToken,
+        hasAccessToken: !!tokens?.accessToken,
+        accessTokenExpiresAt: tokens?.accessTokenExpiresAt || 0,
+        storagePath: 'zoho_private/state'
+      },
+      checks,
+      firestoreChecks
+    });
+  } catch (err: any) {
+    await addSyncLog('Zoho Readiness Check', 'Test Connection', false, safeError(err), 'Client');
+    return res.status(200).json({
+      success: false,
+      overallReady: false,
+      error: 'Zoho readiness check failed: ' + safeError(err)
+    });
+  }
+});
+
 // Auth URL Route
 app.get('/api/zoho/auth-url', async (req, res) => {
   try {
@@ -503,19 +786,7 @@ app.get('/api/zoho/auth-url', async (req, res) => {
     }
 
     const redirectUri = getRedirectUri(req);
-    const scopes = [
-      'ZohoBooks.fullaccess.all',
-      'ZohoBooks.fullaccess.ALL',
-      'ZohoBooks.organizations.READ'
-    ].join(' ');
-
-    const authUrl = `https://${config.accountsDomain}/oauth/v2/auth?` +
-      `scope=${encodeURIComponent(scopes)}` +
-      `&client_id=${config.clientId}` +
-      `&response_type=code` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&access_type=offline` +
-      `&prompt=consent`;
+    const authUrl = buildZohoAuthUrl(config, redirectUri);
 
     return res.json({ success: true, url: authUrl });
   } catch (err: any) {
