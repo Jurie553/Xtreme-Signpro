@@ -219,50 +219,154 @@ export async function getDocument<T>(collectionPath: string, id: string) {
 }
 
 export async function seedProductCategories(): Promise<void> {
+  const workflow = {
+    small: ['Prepress', 'Printing', 'Finishing', 'Quality Check', 'Ready'],
+    large: ['Prepress', 'Printing', 'Laminating', 'Finishing', 'Quality Check', 'Ready'],
+    rigid: ['Prepress', 'Printing', 'Mounting', 'Finishing', 'Quality Check', 'Ready'],
+    display: ['Prepress', 'Printing', 'Hardware Assembly', 'Finishing', 'Quality Check', 'Ready'],
+    commercial: ['Prepress', 'Printing', 'Finishing', 'Quality Check', 'Ready'],
+    ncr: ['Prepress', 'Printing', 'Numbering', 'Collation', 'Binding', 'Quality Check', 'Ready'],
+    promo: ['Prepress', 'Printing', 'Finishing', 'Quality Check', 'Ready'],
+    custom: ['Prepress', 'Production', 'Finishing', 'Quality Check', 'Ready']
+  };
+
+  const makeCategory = (
+    name: string,
+    slug: string,
+    type: 'Product' | 'NCR' | 'Litho',
+    description: string,
+    icon: string,
+    productGroup: string,
+    defaultWorkflow: string[],
+    costingMethod: string,
+    requiredFields: string[],
+    compatibleMaterials: string[]
+  ) => ({
+    name,
+    slug,
+    type,
+    description,
+    icon,
+    active: true,
+    productGroup,
+    defaultWorkflow,
+    defaultCostingRules: {
+      costingMethod,
+      vatApplicable: true,
+      marginReview: true,
+      dimensionsRequired: requiredFields.includes('width') || requiredFields.includes('length')
+    },
+    compatibleMaterials,
+    requiredFields
+  });
+
   const defaultCategories = [
-    { name: 'Business Cards', slug: 'business-cards', type: 'Product', description: 'Standard size premium business cards with custom finishing', icon: 'Tag', active: true, productGroup: 'Small Format' },
-    { name: 'Flyers', slug: 'flyers', type: 'Product', description: 'Single and double sided promotional hand-outs', icon: 'Layers', active: true, productGroup: 'Small Format' },
-    { name: 'Posters', slug: 'posters', type: 'Product', description: 'Indoor and outdoor large size high-definition posters', icon: 'Layers', active: true, productGroup: 'Large Format' },
-    { name: 'Stickers', slug: 'stickers', type: 'Product', description: 'Printed vinyl adhesive decals with custom kiss-cutting', icon: 'Tag', active: true, productGroup: 'Labels' },
-    { name: 'Labels', slug: 'labels', type: 'Product', description: 'Roll and sheet labels for product packaging', icon: 'Tag', active: true, productGroup: 'Labels' },
-    { name: 'Vinyl Banners', slug: 'vinyl-banners', type: 'Product', description: 'Heavy duty PVC wrap-wound banner options', icon: 'Layers', active: true, productGroup: 'Large Format' },
-    { name: 'Correx Boards', slug: 'correx-boards', type: 'Product', description: 'Fluted plastic lightweight corrugated boards', icon: 'Box', active: true, productGroup: 'Rigid Media' },
-    { name: 'Chromadek Signs', slug: 'chromadek-signs', type: 'Product', description: 'Heavy-duty steel outdoor protective signage', icon: 'Sparkles', active: true, productGroup: 'Rigid Media' },
-    { name: 'Pull-up Banners', slug: 'pull-up-banners', type: 'Product', description: 'Retractable roll-up exhibition banner mechanisms', icon: 'Layers', active: true, productGroup: 'Large Format' },
-    { name: 'Pop-up Banners', slug: 'pop-up-banners', type: 'Product', description: 'Pop-up spring steel promotional banner frames', icon: 'Layers', active: true, productGroup: 'Large Format' },
-    { name: 'Gazebos', slug: 'gazebos', type: 'Product', description: 'Outdoor branded shade structures and gazebos', icon: 'Tent', active: true, productGroup: 'Large Format' },
-    { name: 'NCR Books', slug: 'ncr-books', type: 'NCR', description: 'Duplicate/triplicate carbonless receipt and invoice books', icon: 'BookOpen', active: true, productGroup: 'Commercial Print' },
-    { name: 'Booklets', slug: 'booklets', type: 'Product', description: 'Multi-page folded and stapled booklets and brochures', icon: 'BookOpen', active: true, productGroup: 'Commercial Print' },
-    { name: 'Brochures', slug: 'brochures', type: 'Product', description: 'Multi-page gatefolded high-finish brochures', icon: 'Layers', active: true, productGroup: 'Commercial Print' },
-    { name: 'Letterheads', slug: 'letterheads', type: 'Product', description: 'Corporate custom letterheads', icon: 'Layers', active: true, productGroup: 'Small Format' },
-    { name: 'Litho Printing', slug: 'litho-printing', type: 'Litho', description: 'Offset/lithographic high-volume paper printing', icon: 'Printer', active: true, productGroup: 'Commercial Print' },
-    { name: 'Digital Printing', slug: 'digital-printing', type: 'Product', description: 'Short-run laser and digital paper outputs', icon: 'Printer', active: true, productGroup: 'Small Format' },
-    { name: 'Large Format', slug: 'large-format', type: 'Product', description: 'Wide-format prints, rolls, and poster prints', icon: 'Layers', active: true, productGroup: 'Large Format' },
-    { name: 'Promotional Items', slug: 'promotional-items', type: 'Product', description: 'General printed promotional merchandise', icon: 'Briefcase', active: true, productGroup: 'Promo' },
-    { name: 'Other', slug: 'other', type: 'Product', description: 'Custom products with manual costing specs', icon: 'Sliders', active: true, productGroup: 'Other' }
+    makeCategory('Business Cards', 'business-cards', 'Product', 'Premium business cards with common finishing such as matt, gloss, rounded corners, spot UV, and foiling.', 'Tag', 'Small Format', workflow.small, 'Per Item', ['quantity', 'sides', 'paperStock', 'finishing'], ['Coated paper', 'Uncoated board', 'Textured board']),
+    makeCategory('Flyers', 'flyers', 'Product', 'Single and double sided flyers for short-run digital or larger campaign print jobs.', 'Layers', 'Small Format', workflow.small, 'Per Item', ['quantity', 'size', 'sides', 'paperStock'], ['Coated paper', 'Bond paper']),
+    makeCategory('Posters', 'posters', 'Product', 'Indoor and outdoor posters with flexible paper, vinyl, or synthetic media options.', 'Layers', 'Large Format', workflow.large, 'Area', ['quantity', 'width', 'length', 'material'], ['Poster paper', 'Synthetic poster media', 'Vinyl']),
+    makeCategory('Stickers', 'stickers', 'Product', 'Printed vinyl decals, kiss-cut stickers, labels, and contour-cut adhesive graphics.', 'Tag', 'Labels', workflow.large, 'Area', ['quantity', 'width', 'length', 'material', 'cutting'], ['White vinyl', 'Clear vinyl', 'Reflective vinyl', 'One-way vision']),
+    makeCategory('Labels', 'labels', 'Product', 'Roll or sheet labels for packaging, promotions, compliance stickers, and product branding.', 'Tag', 'Labels', workflow.small, 'Per Item', ['quantity', 'size', 'material', 'finish'], ['Paper label stock', 'Vinyl label stock', 'Clear label stock']),
+    makeCategory('PVC Banners', 'pvc-banners', 'Product', 'PVC banner printing with hems, eyelets, pole pockets, and outdoor finishing options.', 'Flag', 'Large Format', workflow.large, 'Area', ['quantity', 'width', 'length', 'material', 'finishing'], ['PVC banner', 'Blockout PVC', 'Mesh banner']),
+    makeCategory('Vinyl Banners', 'vinyl-banners', 'Product', 'Flexible vinyl banner products for events, promotions, building wraps, and signage campaigns.', 'Flag', 'Large Format', workflow.large, 'Area', ['quantity', 'width', 'length', 'material', 'finishing'], ['PVC banner', 'Vinyl banner', 'Mesh banner']),
+    makeCategory('Large Format', 'large-format', 'Product', 'General wide-format roll media, wall graphics, poster runs, and oversized printed graphics.', 'Layers', 'Large Format', workflow.large, 'Area', ['quantity', 'width', 'length', 'material'], ['Vinyl', 'Canvas', 'Wallpaper', 'Poster paper']),
+    makeCategory('Correx Boards', 'correx-boards', 'Product', 'Fluted correx signage boards for estate agent signs, event signs, and lightweight outdoor boards.', 'Box', 'Rigid Media', workflow.rigid, 'Area', ['quantity', 'width', 'length', 'material'], ['Correx board', 'Vinyl']),
+    makeCategory('Chromadek Signs', 'chromadek-signs', 'Product', 'Durable steel outdoor signage using vinyl application, print-and-mount, or direct print production.', 'Sparkles', 'Rigid Media', workflow.rigid, 'Area', ['quantity', 'width', 'length', 'material'], ['Chromadek', 'Vinyl', 'Laminate']),
+    makeCategory('ABS Signs', 'abs-signs', 'Product', 'ABS plastic signs for safety, directional, industrial, and branded indoor/outdoor applications.', 'Box', 'Rigid Media', workflow.rigid, 'Area', ['quantity', 'width', 'length', 'material'], ['ABS sheet', 'Vinyl', 'Laminate']),
+    makeCategory('Foam Board Signs', 'foam-board-signs', 'Product', 'Lightweight mounted foam board signs and presentation boards for indoor display.', 'Box', 'Rigid Media', workflow.rigid, 'Area', ['quantity', 'width', 'length', 'material'], ['Foam board', 'Poster paper', 'Vinyl']),
+    makeCategory('ACM Signs', 'acm-signs', 'Product', 'Aluminium composite signage panels for professional exterior and long-term installations.', 'Box', 'Rigid Media', workflow.rigid, 'Area', ['quantity', 'width', 'length', 'material'], ['ACM panel', 'Vinyl', 'Laminate']),
+    makeCategory('Pull-up Banners', 'pull-up-banners', 'Product', 'Retractable pull-up banner systems with printed inserts and hardware options.', 'Layers', 'Exhibition/Display', workflow.display, 'Per Item', ['quantity', 'width', 'length', 'hardware'], ['Display film', 'PVC banner', 'Pull-up mechanism']),
+    makeCategory('Pop-up Banners', 'pop-up-banners', 'Product', 'Spring-frame pop-up banners and portable display signage for events and activations.', 'Layers', 'Exhibition/Display', workflow.display, 'Per Item', ['quantity', 'size', 'hardware'], ['Display fabric', 'PVC media']),
+    makeCategory('Gazebos', 'gazebos', 'Product', 'Branded gazebo canopies and walls for outdoor events, trade shows, and promotional activations.', 'Tent', 'Exhibition/Display', workflow.display, 'Per Item', ['quantity', 'size', 'hardware', 'artwork'], ['Gazebo fabric', 'Hardware']),
+    makeCategory('Flags', 'flags', 'Product', 'Sharkfin, teardrop, telescopic, and wall-mounted flags with printed fabric and hardware.', 'Flag', 'Exhibition/Display', workflow.display, 'Per Item', ['quantity', 'size', 'hardware'], ['Flag fabric', 'Pole hardware']),
+    makeCategory('Fabric Backdrops', 'fabric-backdrops', 'Product', 'Stretch fabric backdrops, stage backgrounds, and event photo walls.', 'Layers', 'Exhibition/Display', workflow.display, 'Area', ['quantity', 'width', 'length', 'material'], ['Display fabric', 'Stretch fabric']),
+    makeCategory('Media Walls', 'media-walls', 'Product', 'Press walls, photo walls, and branded event backdrops with modular hardware.', 'Layers', 'Exhibition/Display', workflow.display, 'Per Item', ['quantity', 'width', 'length', 'hardware'], ['Display fabric', 'PVC banner', 'Frame hardware']),
+    makeCategory('Exhibition Branding', 'exhibition-branding', 'Product', 'Grouped exhibition and event branding products including stands, walls, flags, and venue graphics.', 'Tent', 'Exhibition/Display', workflow.display, 'Per Item', ['quantity', 'hardware', 'artwork'], ['Display fabric', 'PVC media', 'Hardware']),
+    makeCategory('NCR Books', 'ncr-books', 'NCR', 'Duplicate, triplicate, and custom carbonless books with numbering, perforation, and binding options.', 'BookOpen', 'Commercial Print', workflow.ncr, 'NCR', ['quantity', 'parts', 'setsPerBook', 'numbering', 'binding'], ['NCR CB paper', 'NCR CFB paper', 'NCR CF paper', 'Board backing']),
+    makeCategory('Litho Printing', 'litho-printing', 'Litho', 'Offset and lithographic production for high-volume paper print with imposition and finishing.', 'Printer', 'Commercial Print', workflow.commercial, 'Page', ['quantity', 'size', 'paperStock', 'sides', 'finishing'], ['Litho paper', 'Coated paper', 'Uncoated paper']),
+    makeCategory('Digital Printing', 'digital-printing', 'Product', 'Short-run digital paper printing for office, marketing, and variable-data jobs.', 'Printer', 'Small Format', workflow.small, 'Page', ['quantity', 'size', 'paperStock', 'sides'], ['Bond paper', 'Coated paper', 'Card stock']),
+    makeCategory('Booklets', 'booklets', 'Product', 'Multi-page booklets, manuals, programmes, and stitched brochures with finishing options.', 'BookOpen', 'Commercial Print', workflow.commercial, 'Page', ['quantity', 'pages', 'size', 'paperStock', 'binding'], ['Coated paper', 'Uncoated paper', 'Cover board']),
+    makeCategory('Brochures', 'brochures', 'Product', 'Folded brochures, menus, and promotional pieces with creasing, folding, and coating options.', 'Layers', 'Commercial Print', workflow.commercial, 'Per Item', ['quantity', 'size', 'paperStock', 'folding'], ['Coated paper', 'Uncoated paper']),
+    makeCategory('Letterheads', 'letterheads', 'Product', 'Corporate letterheads and stationery on bond or premium paper stocks.', 'Layers', 'Small Format', workflow.small, 'Per Item', ['quantity', 'paperStock', 'sides'], ['Bond paper', 'Conqueror paper']),
+    makeCategory('Envelopes', 'envelopes', 'Product', 'Printed business envelopes, invitation envelopes, and branded stationery envelopes.', 'Mail', 'Small Format', workflow.small, 'Per Item', ['quantity', 'size', 'printColor'], ['Envelope stock']),
+    makeCategory('Presentation Folders', 'presentation-folders', 'Product', 'Die-cut folders with pockets, business-card slots, lamination, and custom finishes.', 'BookOpen', 'Commercial Print', workflow.commercial, 'Per Item', ['quantity', 'paperStock', 'dieCut', 'finishing'], ['Cover board', 'Coated board']),
+    makeCategory('Promotional Items', 'promotional-items', 'Product', 'Promotional merchandise, branded gifts, and campaign items with manual costing support.', 'Briefcase', 'Promo', workflow.promo, 'Per Item', ['quantity', 'itemType', 'brandingMethod'], ['Promo item', 'Transfer media']),
+    makeCategory('Apparel Branding', 'apparel-branding', 'Product', 'Branded clothing, heat press transfers, embroidery, and screenprinting products.', 'Shirt', 'Promo', workflow.promo, 'Per Item', ['quantity', 'garment', 'brandingMethod', 'positions'], ['Garment', 'Heat transfer vinyl', 'Embroidery thread']),
+    makeCategory('Packaging', 'packaging', 'Product', 'Custom printed packaging, belly bands, swing tags, stickers, and branded boxes.', 'Package', 'Commercial Print', workflow.commercial, 'Per Item', ['quantity', 'size', 'material', 'finishing'], ['Board', 'Label stock', 'Packaging substrate']),
+    makeCategory('Materials', 'materials', 'Product', 'Sellable raw substrates and stock items quoted directly from the material registry.', 'Database', 'Other', workflow.custom, 'Area', ['quantity', 'material'], ['Any stock material']),
+    makeCategory('General Products', 'general-products', 'Product', 'General print and signage products that do not need a specialist calculator.', 'Briefcase', 'Other', workflow.custom, 'Per Item', ['quantity', 'description'], ['Manual selection']),
+    makeCategory('Custom Products', 'custom-products', 'Product', 'Estimator-defined custom production items for once-off or unusual jobs.', 'Sliders', 'Other', workflow.custom, 'Per Item', ['quantity', 'description', 'manualPrice'], ['Manual selection']),
+    makeCategory('Other', 'other', 'Product', 'Fallback category for uncategorised items until they are assigned to a better production category.', 'Sliders', 'Other', workflow.custom, 'Per Item', ['quantity', 'description'], ['Manual selection'])
   ];
+
+  const categoryAliases: Record<string, string> = {
+    'banner': 'PVC Banners',
+    'banners': 'PVC Banners',
+    'vinyl banner': 'Vinyl Banners',
+    'vinyl banners': 'Vinyl Banners',
+    'pvc banner': 'PVC Banners',
+    'pvc banners': 'PVC Banners',
+    'pull up banners': 'Pull-up Banners',
+    'pull-up banner': 'Pull-up Banners',
+    'popup banners': 'Pop-up Banners',
+    'pop up banners': 'Pop-up Banners',
+    'fabric backdrop': 'Fabric Backdrops',
+    'media wall': 'Media Walls',
+    'media walls': 'Media Walls',
+    'flags': 'Flags',
+    'flag': 'Flags',
+    'gazebo': 'Gazebos',
+    'chromadek': 'Chromadek Signs',
+    'correx': 'Correx Boards',
+    'foam board': 'Foam Board Signs',
+    'acm': 'ACM Signs',
+    'aluminium composite': 'ACM Signs',
+    'abs': 'ABS Signs',
+    'ncr': 'NCR Books',
+    'ncr book': 'NCR Books',
+    'litho': 'Litho Printing',
+    'offset': 'Litho Printing',
+    'digital': 'Digital Printing',
+    'large format print': 'Large Format',
+    'large format': 'Large Format',
+    'general': 'General Products',
+    'custom': 'Custom Products',
+    'uncategorized': 'Other',
+    'uncategorised': 'Other'
+  };
 
   try {
     const existing = await getCollection<any>('product_categories');
-    const existingSlugs = new Set(existing.map(c => c.slug));
+    const existingBySlug = new Map<string, any>(existing.map(c => [c.slug, c]));
     
     let addedCount = 0;
+    let refreshedCount = 0;
     for (const cat of defaultCategories) {
-      if (!existingSlugs.has(cat.slug)) {
+      const existingCat = existingBySlug.get(cat.slug);
+      if (!existingCat) {
         await createDocument('product_categories', {
           ...cat,
-          defaultWorkflow: [],
-          defaultCostingRules: {},
-          compatibleMaterials: [],
-          requiredFields: [],
           createdAt: Date.now(),
           updatedAt: Date.now()
         });
         addedCount++;
+      } else {
+        const metadataUpdate: any = {};
+        for (const key of ['description', 'icon', 'productGroup', 'type', 'defaultWorkflow', 'defaultCostingRules', 'compatibleMaterials', 'requiredFields']) {
+          if (JSON.stringify(existingCat[key] ?? null) !== JSON.stringify((cat as any)[key] ?? null)) {
+            metadataUpdate[key] = (cat as any)[key];
+          }
+        }
+        if (Object.keys(metadataUpdate).length > 0) {
+          await updateDocument('product_categories', existingCat.id, {
+            ...metadataUpdate,
+            updatedAt: Date.now()
+          });
+          refreshedCount++;
+        }
       }
     }
-    if (addedCount > 0) {
-      console.log(`[Developer Diagnostics] Seeded ${addedCount} missing product categories.`);
+    if (addedCount > 0 || refreshedCount > 0) {
+      console.log(`[Developer Diagnostics] Seeded ${addedCount} missing product categories and refreshed ${refreshedCount} existing category metadata records.`);
     }
 
     // Dynamic Auditing and Synchronization of Products and Product Categories
@@ -272,8 +376,14 @@ export async function seedProductCategories(): Promise<void> {
     for (const p of products) {
       let categoryMatch = updatedCategories.find(c => c.id === p.categoryId);
       if (!categoryMatch) {
+        const rawCategory = String(p.categoryName || p.category || '').trim();
+        const normalizedCategory = rawCategory.toLowerCase().replace(/\s+/g, ' ');
+        const aliasTargetName = categoryAliases[normalizedCategory];
         categoryMatch = updatedCategories.find(
-          c => c.name === p.categoryName || c.name === p.category || c.slug === p.category?.toLowerCase().replace(/\s+/g, '-')
+          c => c.name === p.categoryName ||
+               c.name === p.category ||
+               c.name === aliasTargetName ||
+               c.slug === rawCategory.toLowerCase().replace(/\s+/g, '-')
         );
       }
       

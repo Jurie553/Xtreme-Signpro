@@ -988,7 +988,10 @@ export default function Products() {
                     <option value="Small Format">Small Format Media</option>
                     <option value="Large Format">Large Format Media</option>
                     <option value="Rigid Media">Rigid Boards / Media</option>
+                    <option value="Exhibition/Display">Exhibition / Display</option>
                     <option value="Commercial Print">Commercial Office Print</option>
+                    <option value="Labels">Labels & Stickers</option>
+                    <option value="Packaging">Packaging</option>
                     <option value="Promo">Promotional Products</option>
                     <option value="Other">Unassigned / Other</option>
                   </select>

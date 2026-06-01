@@ -831,7 +831,6 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem, init
                                                 const p = products.find(prod => prod.id === productId);
                                                 if (!p) return null;
                                                 const cat = dbCategories.find(c => c.name === p.categoryName || c.name === p.category);
-                                                if (cat?.productGroup === 'Exhibition/Display') return null;
                                                 return (
                                                   <button
                                                     key={p.id}
@@ -915,7 +914,7 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem, init
                                             </button>
 
                                             {/* Render dynamically loaded Categories */}
-                                            {dbCategories.filter(c => c.active && c.slug !== 'custom-products' && c.productGroup !== 'Exhibition/Display').map(c => {
+                                            {dbCategories.filter(c => c.active && c.slug !== 'custom-products').map(c => {
                                               let count = 0;
                                               if (c.type === 'NCR') count = ncrBooks.length;
                                               else if (c.type === 'Litho') count = lithoProducts.length;
