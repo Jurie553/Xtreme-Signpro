@@ -781,14 +781,14 @@ app.get('/api/zoho/auth-url', async (req, res) => {
     if (!config.clientId) {
       return res.status(200).json({
         success: false,
-        error: "Zoho Client ID is missing. Please configure it in the dashboard settings grid."
+        error: "Zoho OAuth is not configured. Missing ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI, or ZOHO_ACCOUNTS_URL."
       });
     }
 
     const redirectUri = getRedirectUri(req);
     const authUrl = buildZohoAuthUrl(config, redirectUri);
 
-    return res.json({ success: true, url: authUrl });
+    return res.json({ success: true, authUrl, url: authUrl });
   } catch (err: any) {
     return res.status(200).json({
       success: false,

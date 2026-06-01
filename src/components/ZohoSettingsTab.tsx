@@ -88,6 +88,10 @@ const DEFAULT_ZOHO_SETTINGS: ZohoSettings = {
 
 const ZOHO_API_UNAVAILABLE_MESSAGE =
   'This API endpoint is not available on this deployment. Zoho backend routes may need Cloud Run or Vercel serverless functions.';
+const ZOHO_OAUTH_EMPTY_MESSAGE =
+  'The Zoho OAuth endpoint returned an empty response. Please check the backend deployment and Zoho environment variables.';
+const ZOHO_OAUTH_NON_JSON_MESSAGE =
+  'The Zoho OAuth endpoint is not returning JSON. This usually means the backend route is missing or the deployment is frontend-only.';
 
 export default function ZohoSettingsTab() {
   const { data: zohoSettingsList, loading: loadingSettings } = useCollection<ZohoSettings>('settings');
@@ -147,37 +151,54 @@ export default function ZohoSettingsTab() {
 
   const fetchZohoJson = async (url: string, options?: RequestInit) => {
     const response = await fetch(url, options);
+    const status = response.status;
     const contentType = response.headers.get('content-type') || '';
     const isJson = contentType.toLowerCase().includes('application/json');
+    const isOauthUrl = url.includes('/api/zoho/auth-url');
+    const text = await response.text();
 
-    if (!response.ok) {
-      const message = response.status === 404 || response.status === 405 || response.status === 503
-        ? ZOHO_API_UNAVAILABLE_MESSAGE
-        : `Zoho API request failed with status ${response.status}.`;
+    if (!isJson) {
+      const message = isOauthUrl ? ZOHO_OAUTH_NON_JSON_MESSAGE : ZOHO_API_UNAVAILABLE_MESSAGE;
       setZohoApiAvailable(false);
       setZohoApiWarning(message);
       throw new Error(message);
     }
 
-    if (!isJson) {
-      setZohoApiAvailable(false);
-      setZohoApiWarning(ZOHO_API_UNAVAILABLE_MESSAGE);
-      throw new Error(ZOHO_API_UNAVAILABLE_MESSAGE);
-    }
-
-    const text = await response.text();
     if (!text.trim()) {
-      throw new Error('The Zoho API returned an empty response. Please try again.');
+      const message = isOauthUrl ? ZOHO_OAUTH_EMPTY_MESSAGE : 'The Zoho API returned an empty response. Please try again.';
+      setZohoApiAvailable(false);
+      setZohoApiWarning(message);
+      throw new Error(message);
     }
 
+    let data: any;
     try {
-      const data = JSON.parse(text);
-      setZohoApiAvailable(true);
-      setZohoApiWarning('');
-      return data;
+      data = JSON.parse(text);
     } catch {
-      throw new Error('The Zoho API returned invalid JSON. Please try again or check the backend logs.');
+      const message = isOauthUrl
+        ? ZOHO_OAUTH_NON_JSON_MESSAGE
+        : 'The Zoho API returned invalid JSON. Please try again or check the backend logs.';
+      setZohoApiAvailable(false);
+      setZohoApiWarning(message);
+      throw new Error(message);
     }
+
+    if (!response.ok) {
+      const message = data?.error || data?.message || (
+        status === 404 || status === 405 || status === 503
+          ? ZOHO_API_UNAVAILABLE_MESSAGE
+          : `Zoho API request failed with status ${status}.`
+      );
+      if (status === 404 || status === 405 || status === 503) {
+        setZohoApiAvailable(false);
+        setZohoApiWarning(message);
+      }
+      throw new Error(message);
+    }
+
+    setZohoApiAvailable(true);
+    setZohoApiWarning('');
+    return data;
   };
 
   // Initialize and check code on search query
@@ -317,34 +338,43 @@ export default function ZohoSettingsTab() {
         clientSecret: settings.clientSecret.trim(),
         organizationId: settings.organizationId.trim(),
       };
-      const saveData = await fetchZohoJson('/api/zoho/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: sanitizedSettings.clientId,
-          clientSecret: sanitizedSettings.clientSecret,
-          organizationId: sanitizedSettings.organizationId,
-          region: sanitizedSettings.region
-        })
-      });
-      if (!saveData.success) {
-        throw new Error(saveData.error || 'Zoho configuration could not be saved.');
+      try {
+        const saveData = await fetchZohoJson('/api/zoho/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: sanitizedSettings.clientId,
+            clientSecret: sanitizedSettings.clientSecret,
+            organizationId: sanitizedSettings.organizationId,
+            region: sanitizedSettings.region
+          })
+        });
+        if (!saveData.success) {
+          throw new Error(saveData.error || 'Zoho configuration could not be saved.');
+        }
+        setSettings(sanitizedSettings);
+      } catch (saveError: any) {
+        console.warn('Zoho configuration save skipped or failed before OAuth URL generation:', saveError.message);
       }
-      setSettings(sanitizedSettings);
 
       const data = await fetchZohoJson('/api/zoho/auth-url');
       if (!data.success) {
         throw new Error(data.error || 'Server rejected authorization url payload');
       }
 
-      setPendingAuthorizeUrl(data.url);
+      const authUrl = data.authUrl || data.url;
+      if (!authUrl || typeof authUrl !== 'string' || !authUrl.startsWith('https://')) {
+        throw new Error('Zoho OAuth did not return a valid authorization URL. Please check Zoho environment variables.');
+      }
+
+      setPendingAuthorizeUrl(authUrl);
       setDebugLog(prev => ({
         ...prev,
         lastResponseStatus: '200 OK',
         lastError: 'None'
       }));
 
-      const newWin = window.open(data.url, '_blank');
+      const newWin = window.open(authUrl, '_blank');
       if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
         toast.warning('Popup blocker detected. Please click the "Authorize Manually" button that has appeared, or allow popups for this site.');
       } else {

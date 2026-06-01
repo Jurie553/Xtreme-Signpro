@@ -10,6 +10,8 @@ Local code checks pass. Live Zoho/Firebase checks still need to be run in the de
 
 Update on 2026-06-01: Vercel JSON parsing failures were fixed so the Zoho settings UI fails gracefully when `/api/zoho/*` backend routes are unavailable.
 
+Update on 2026-06-01: The Connect OAuth flow was hardened so an empty, HTML, or invalid `/api/zoho/auth-url` response cannot trigger `response.json()` / `Unexpected end of JSON input` errors.
+
 ## What Passed
 
 - `npm run typecheck` passed.
@@ -22,6 +24,9 @@ Update on 2026-06-01: Vercel JSON parsing failures were fixed so the Zoho settin
 - Frontend Zoho API calls now use guarded JSON handling and do not call JSON parsing on HTML, empty, or non-JSON responses.
 - Vercel now has a `/api/zoho/*` fallback function that returns JSON with a clear backend-unavailable message instead of serving `index.html`.
 - `vercel.json` no longer rewrites `/api/*` paths to the Vite SPA shell.
+- `/api/zoho/auth-url` now returns `{ success: true, authUrl, url }` when OAuth env vars are present.
+- `/api/zoho/auth-url` returns a safe JSON error when required OAuth env vars are missing.
+- Generated OAuth URLs include `client_id`, `redirect_uri`, `response_type=code`, `access_type=offline`, `prompt=consent`, and Zoho Books scopes.
 - OAuth URL generation uses the configured Zoho Accounts domain, offline access, consent prompt, and the backend callback redirect URI.
 - Callback handling remains at `/api/zoho/callback`.
 - Access tokens, refresh tokens, and saved client secret are stored in `zoho_private/state`; `settings/zoho` only stores public connection/config metadata.
@@ -58,15 +63,48 @@ The Vercel deployment was likely serving the Vite `index.html` page for `/api/zo
 Fixes added:
 
 - `src/components/ZohoSettingsTab.tsx` now checks `response.ok` and `content-type` before parsing JSON.
+- The frontend Zoho helper now reads `response.text()` first and parses JSON only after confirming the body is non-empty JSON.
+- Empty OAuth responses now show:
+
+  `The Zoho OAuth endpoint returned an empty response. Please check the backend deployment and Zoho environment variables.`
+
+- HTML/non-JSON OAuth responses now show:
+
+  `The Zoho OAuth endpoint is not returning JSON. This usually means the backend route is missing or the deployment is frontend-only.`
+
 - Non-JSON, empty, unavailable, or failed API responses show:
 
   `This API endpoint is not available on this deployment. Zoho backend routes may need Cloud Run or Vercel serverless functions.`
 
 - Live Zoho buttons are disabled after the panel detects that the backend is unavailable.
 - `api/zoho/[...path].ts` returns JSON for Zoho API paths on Vercel, preventing HTML parse crashes.
+- `api/zoho/[...path].ts` can generate the OAuth URL on Vercel from `ZOHO_CLIENT_ID`, `ZOHO_REDIRECT_URI`, and `ZOHO_ACCOUNTS_URL` without exposing `ZOHO_CLIENT_SECRET`.
 - `vercel.json` excludes `/api/*` from the SPA rewrite.
 
 This fallback does not perform live Zoho sync. It only prevents crashes and explains the deployment limitation.
+
+## OAuth Redirect Flow Fix
+
+Connect OAuth now:
+
+- Calls `/api/zoho/auth-url`.
+- Accepts either `{ success: true, authUrl: "..." }` or `{ success: true, url: "..." }`.
+- Validates that the returned value is an HTTPS URL before opening it.
+- Shows a friendly error when OAuth is not configured or the endpoint response is empty/non-JSON.
+- Does not expose `ZOHO_CLIENT_SECRET` to the frontend.
+
+Vercel fallback verification:
+
+- Missing env returned:
+
+  `{ "success": false, "error": "Zoho OAuth is not configured. Missing ZOHO_CLIENT_ID, ZOHO_REDIRECT_URI, or ZOHO_ACCOUNTS_URL." }`
+
+- With test env values, the generated URL included:
+  - `client_id`
+  - `redirect_uri`
+  - `response_type=code`
+  - `access_type=offline`
+  - Zoho Books scopes
 
 ## Needs Real Live Testing
 
@@ -123,10 +161,12 @@ Deployment still needs Firestore permission verification for:
   - Added Export One Test Estimate and Export One Test Invoice buttons using existing real export handlers.
   - Added readiness result display for redirect URI, Zoho domains, and token storage.
   - Added safe JSON handling for every Zoho frontend API request.
+  - Hardened Connect OAuth against empty, invalid, or non-JSON `/auth-url` responses.
   - Added backend-unavailable warning and disables live sync buttons when Vercel does not provide the backend.
 
 - `api/zoho/[...path].ts`
   - Added Vercel JSON fallback for `/api/zoho/*`.
+  - Added `/api/zoho/auth-url` fallback behavior that returns a generated OAuth URL when safe public OAuth env vars are present.
 
 - `vercel.json`
   - Updated SPA rewrite so `/api/*` is not rewritten to `index.html`.
