@@ -8,14 +8,20 @@ Zoho sync readiness was improved with a dedicated backend readiness endpoint and
 
 Local code checks pass. Live Zoho/Firebase checks still need to be run in the deployed app because the Zoho and Firebase server environment variables are configured in deployment settings, not in this local workspace.
 
+Update on 2026-06-01: Vercel JSON parsing failures were fixed so the Zoho settings UI fails gracefully when `/api/zoho/*` backend routes are unavailable.
+
 ## What Passed
 
 - `npm run typecheck` passed.
 - `npm run lint` passed. This project currently maps lint to `tsc --noEmit`.
 - `npm run build` passed.
+- `npm run build:vercel` passed when run outside the local Windows sandbox path restriction.
 - `/api/zoho/config` returns friendly JSON and does not expose the client secret.
 - `/api/zoho/auth-url` returns a friendly missing-client-id warning locally instead of crashing.
 - `/api/zoho/readiness` now returns friendly JSON instead of hanging when local Firebase config is missing.
+- Frontend Zoho API calls now use guarded JSON handling and do not call JSON parsing on HTML, empty, or non-JSON responses.
+- Vercel now has a `/api/zoho/*` fallback function that returns JSON with a clear backend-unavailable message instead of serving `index.html`.
+- `vercel.json` no longer rewrites `/api/*` paths to the Vite SPA shell.
 - OAuth URL generation uses the configured Zoho Accounts domain, offline access, consent prompt, and the backend callback redirect URI.
 - Callback handling remains at `/api/zoho/callback`.
 - Access tokens, refresh tokens, and saved client secret are stored in `zoho_private/state`; `settings/zoho` only stores public connection/config metadata.
@@ -44,6 +50,23 @@ Local code checks pass. Live Zoho/Firebase checks still need to be run in the de
   - `APP_URL`
   - `VITE_PUBLIC_APP_URL`
 - Live Zoho API calls were not executed locally because there is no local refresh token and network/live credentials are deployment-only.
+
+## Vercel Compatibility Fix
+
+The Vercel deployment was likely serving the Vite `index.html` page for `/api/zoho/config`, `/api/zoho/auth-url`, `/api/zoho/readiness`, and related API paths. That made the frontend try to parse HTML as JSON, causing errors such as `Unexpected token <`.
+
+Fixes added:
+
+- `src/components/ZohoSettingsTab.tsx` now checks `response.ok` and `content-type` before parsing JSON.
+- Non-JSON, empty, unavailable, or failed API responses show:
+
+  `This API endpoint is not available on this deployment. Zoho backend routes may need Cloud Run or Vercel serverless functions.`
+
+- Live Zoho buttons are disabled after the panel detects that the backend is unavailable.
+- `api/zoho/[...path].ts` returns JSON for Zoho API paths on Vercel, preventing HTML parse crashes.
+- `vercel.json` excludes `/api/*` from the SPA rewrite.
+
+This fallback does not perform live Zoho sync. It only prevents crashes and explains the deployment limitation.
 
 ## Needs Real Live Testing
 
@@ -99,6 +122,17 @@ Deployment still needs Firestore permission verification for:
   - Added Check Config button.
   - Added Export One Test Estimate and Export One Test Invoice buttons using existing real export handlers.
   - Added readiness result display for redirect URI, Zoho domains, and token storage.
+  - Added safe JSON handling for every Zoho frontend API request.
+  - Added backend-unavailable warning and disables live sync buttons when Vercel does not provide the backend.
+
+- `api/zoho/[...path].ts`
+  - Added Vercel JSON fallback for `/api/zoho/*`.
+
+- `vercel.json`
+  - Updated SPA rewrite so `/api/*` is not rewritten to `index.html`.
+
+- `DEPLOYMENT_NOTES.md`
+  - Clarified that Vercel frontend-only deployments do not run the Express Zoho backend.
 
 ## Next Manual Steps
 
@@ -118,4 +152,5 @@ Deployment still needs Firestore permission verification for:
 
 - Full live readiness cannot be proven from this local workspace because deployment-only environment variables are not visible here.
 - Zoho organization-specific validation can still reject contacts, items, estimates, or invoices if that Zoho Books organization requires extra tax/account fields.
+- The Vercel fallback prevents JSON parse crashes but does not replace the Cloud Run Express backend.
 - Build still shows Vite's large bundle warning; it is not a build failure.

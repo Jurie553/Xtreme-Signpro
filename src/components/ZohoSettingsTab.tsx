@@ -86,6 +86,9 @@ const DEFAULT_ZOHO_SETTINGS: ZohoSettings = {
   lastSyncPayments: 0,
 };
 
+const ZOHO_API_UNAVAILABLE_MESSAGE =
+  'This API endpoint is not available on this deployment. Zoho backend routes may need Cloud Run or Vercel serverless functions.';
+
 export default function ZohoSettingsTab() {
   const { data: zohoSettingsList, loading: loadingSettings } = useCollection<ZohoSettings>('settings');
   const { data: syncLogsRaw } = useCollection<SyncLog>('zoho_sync_logs');
@@ -102,6 +105,8 @@ export default function ZohoSettingsTab() {
   const [pullingPayments, setPullingPayments] = useState(false);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
   const [readinessResult, setReadinessResult] = useState<any | null>(null);
+  const [zohoApiAvailable, setZohoApiAvailable] = useState(true);
+  const [zohoApiWarning, setZohoApiWarning] = useState('');
   const [exportingId, setExportingId] = useState<string | null>(null);
   
   const [activeSubTab, setActiveSubTab] = useState<'config' | 'operations' | 'transactions' | 'logs'>('config');
@@ -140,6 +145,41 @@ export default function ZohoSettingsTab() {
   // Logs state
   const syncLogs = [...(syncLogsRaw || [])].sort((a, b) => b.date - a.date);
 
+  const fetchZohoJson = async (url: string, options?: RequestInit) => {
+    const response = await fetch(url, options);
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.toLowerCase().includes('application/json');
+
+    if (!response.ok) {
+      const message = response.status === 404 || response.status === 405 || response.status === 503
+        ? ZOHO_API_UNAVAILABLE_MESSAGE
+        : `Zoho API request failed with status ${response.status}.`;
+      setZohoApiAvailable(false);
+      setZohoApiWarning(message);
+      throw new Error(message);
+    }
+
+    if (!isJson) {
+      setZohoApiAvailable(false);
+      setZohoApiWarning(ZOHO_API_UNAVAILABLE_MESSAGE);
+      throw new Error(ZOHO_API_UNAVAILABLE_MESSAGE);
+    }
+
+    const text = await response.text();
+    if (!text.trim()) {
+      throw new Error('The Zoho API returned an empty response. Please try again.');
+    }
+
+    try {
+      const data = JSON.parse(text);
+      setZohoApiAvailable(true);
+      setZohoApiWarning('');
+      return data;
+    } catch {
+      throw new Error('The Zoho API returned invalid JSON. Please try again or check the backend logs.');
+    }
+  };
+
   // Initialize and check code on search query
   useEffect(() => {
     if (zohoSettingsList.length > 0) {
@@ -152,8 +192,7 @@ export default function ZohoSettingsTab() {
 
   const loadServerConfig = async () => {
     try {
-      const response = await fetch('/api/zoho/config');
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/config');
       if (data.success && data.config) {
         setSettings(prev => ({
           ...prev,
@@ -187,21 +226,7 @@ export default function ZohoSettingsTab() {
   // Check token status on mount and when tab shifts
   const checkTokenStatus = async () => {
     try {
-      const response = await fetch('/api/zoho/token');
-      
-      const contentType = response.headers.get("content-type") || "";
-      let hasJSON = contentType.includes("application/json");
-
-      if (!hasJSON) {
-        setDebugLog(prev => ({
-          ...prev,
-          backendStatus: 'HTML/Text response - Critical API mismatch',
-          lastError: 'Token call returned HTML page'
-        }));
-        return;
-      }
-
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/token');
       if (data.success) {
         setTokenStatus(prev => ({ ...(prev || {}), ...data }));
         setSettings(prev => ({ ...prev, connected: data.hasRefreshToken }));
@@ -292,7 +317,7 @@ export default function ZohoSettingsTab() {
         clientSecret: settings.clientSecret.trim(),
         organizationId: settings.organizationId.trim(),
       };
-      const saveResponse = await fetch('/api/zoho/config', {
+      const saveData = await fetchZohoJson('/api/zoho/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -302,21 +327,12 @@ export default function ZohoSettingsTab() {
           region: sanitizedSettings.region
         })
       });
-      const saveData = await saveResponse.json();
       if (!saveData.success) {
         throw new Error(saveData.error || 'Zoho configuration could not be saved.');
       }
       setSettings(sanitizedSettings);
 
-      const response = await fetch('/api/zoho/auth-url');
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON but received HTML/text from auth-url generator. Directing you to verify backend logic. First 200 chars: " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/auth-url');
       if (!data.success) {
         throw new Error(data.error || 'Server rejected authorization url payload');
       }
@@ -352,8 +368,7 @@ export default function ZohoSettingsTab() {
     
     setTesting(true);
     try {
-      const response = await fetch('/api/zoho/disconnect', { method: 'POST' });
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/disconnect', { method: 'POST' });
       if (!data.success) {
         throw new Error(data.error || 'Disconnect failed.');
       }
@@ -383,7 +398,7 @@ export default function ZohoSettingsTab() {
         clientSecret: settings.clientSecret.trim(),
         organizationId: settings.organizationId.trim(),
       };
-      const response = await fetch('/api/zoho/config', {
+      const data = await fetchZohoJson('/api/zoho/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -393,7 +408,6 @@ export default function ZohoSettingsTab() {
           region: sanitizedSettings.region
         })
       });
-      const data = await response.json();
       if (!data.success) {
         throw new Error(data.error || 'Configuration could not be saved.');
       }
@@ -418,22 +432,14 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const response = await fetch('/api/zoho/test-connection');
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON from Test Connection connection but received HTML page. " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/test-connection');
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: response.status.toString(),
+        lastResponseStatus: '200',
         lastError: data.success ? 'None' : (data.error || 'Verification Failed')
       }));
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Server backend returned unsuccessful verification.');
       }
 
@@ -464,18 +470,11 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const response = await fetch('/api/zoho/readiness');
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON from readiness check but received a webpage. First 200: " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/readiness');
       setReadinessResult(data);
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: response.status.toString(),
+        lastResponseStatus: '200',
         hasRefreshToken: data.tokens?.hasRefreshToken ? 'Yes (stored securely on the server)' : 'Missing',
         orgIdFound: data.config?.organizationIdPresent ? 'Yes' : 'Missing',
         lastError: data.success ? 'None' : (data.error || 'Readiness check failed')
@@ -513,22 +512,14 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const response = await fetch('/api/zoho/sync-clients', { method: 'POST' });
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON from Sync clients route but received HTML. First 200: " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/sync-clients', { method: 'POST' });
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: response.status.toString(),
+        lastResponseStatus: '200',
         lastError: data.success ? 'None' : (data.error || 'Sync operations failure')
       }));
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Sync operations failed.');
       }
 
@@ -552,22 +543,14 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const response = await fetch('/api/zoho/sync-products', { method: 'POST' });
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON from products sync but received HTML. First 200: " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
+      const data = await fetchZohoJson('/api/zoho/sync-products', { method: 'POST' });
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: response.status.toString(),
+        lastResponseStatus: '200',
         lastError: data.success ? 'None' : (data.error || 'Products sync failure')
       }));
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Catalog sync failed.');
       }
 
@@ -591,26 +574,18 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const response = await fetch('/api/zoho/push-quote', {
+      const data = await fetchZohoJson('/api/zoho/push-quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quoteId: quote.id })
       });
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON from Quote Push endpoint. HTML loaded: " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: response.status.toString(),
+        lastResponseStatus: '200',
         lastError: data.success ? 'None' : (data.error || 'Quote transfer fail')
       }));
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Could not map Quote parameters safely to Zoho.');
       }
 
@@ -633,26 +608,18 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const response = await fetch('/api/zoho/push-invoice', {
+      const data = await fetchZohoJson('/api/zoho/push-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id })
       });
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        throw new Error("Expected JSON from Invoice Push endpoint. HTML loaded: " + text.slice(0, 200));
-      }
-
-      const data = await response.json();
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: response.status.toString(),
+        lastResponseStatus: '200',
         lastError: data.success ? 'None' : (data.error || 'Invoice transfer fail')
       }));
 
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Could not map completed Job Card spec to Zoho Invoice.');
       }
 
@@ -675,22 +642,14 @@ export default function ZohoSettingsTab() {
     }));
 
     try {
-      const responseFinal = await fetch('/api/zoho/pull-payments', { method: 'POST' });
-      
-      const contentType = responseFinal.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await responseFinal.text();
-        throw new Error("The app expected a JSON response but received a webpage instead. Please check that the API endpoint URL is correct.");
-      }
-
-      const data = await responseFinal.json();
+      const data = await fetchZohoJson('/api/zoho/pull-payments', { method: 'POST' });
       setDebugLog(prev => ({
         ...prev,
-        lastResponseStatus: responseFinal.status.toString(),
+        lastResponseStatus: '200',
         lastError: data.success ? 'None' : (data.error || 'Payments Sync failure')
       }));
 
-      if (!responseFinal.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Failed to complete payments checking reconcile loop.');
       }
 
@@ -912,6 +871,18 @@ export default function ZohoSettingsTab() {
 
       {/* Main configuration settings box views */}
       <div className="xl:col-span-3 space-y-6">
+        {!zohoApiAvailable && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 flex gap-3">
+            <AlertTriangle size={20} className="shrink-0 text-amber-600" />
+            <div className="space-y-1">
+              <h4 className="text-[10px] font-black uppercase tracking-widest">Zoho backend unavailable</h4>
+              <p className="text-xs font-semibold leading-relaxed">
+                {zohoApiWarning || ZOHO_API_UNAVAILABLE_MESSAGE}
+              </p>
+            </div>
+          </div>
+        )}
+
         {activeSubTab === 'config' && (
           <div className="flex flex-col gap-8 animate-in fade-in duration-300">
             <div className="card-minimal">
@@ -1004,7 +975,7 @@ export default function ZohoSettingsTab() {
                 <div>
                   <button 
                     onClick={handleSaveConfig}
-                    disabled={isSaving}
+                    disabled={isSaving || !zohoApiAvailable}
                     className="px-6 py-3.5 bg-surface border border-slate-200 text-slate-700 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-slate-50 transition-all"
                   >
                     Save Inputs
@@ -1015,7 +986,7 @@ export default function ZohoSettingsTab() {
                     <>
                       <button 
                         onClick={handleTestConnection}
-                        disabled={testing}
+                        disabled={testing || !zohoApiAvailable}
                         className="px-6 py-3.5 border border-amber-200 text-amber-700 bg-amber-50 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-amber-100 transition-all flex items-center gap-2"
                       >
                         {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw size={13} />}
@@ -1023,7 +994,7 @@ export default function ZohoSettingsTab() {
                       </button>
                       <button 
                         onClick={handleDisconnect}
-                        disabled={testing}
+                        disabled={testing || !zohoApiAvailable}
                         className="px-6 py-3.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-rose-100 transition-all flex items-center gap-2"
                       >
                         <Unlink size={13} />
@@ -1034,7 +1005,7 @@ export default function ZohoSettingsTab() {
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                       <button 
                         onClick={handleConnect}
-                        disabled={isSaving}
+                        disabled={isSaving || !zohoApiAvailable}
                         className="px-8 py-4 bg-brand text-white rounded-xl font-black text-[10px] uppercase tracking-[0.15em] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2.5 shadow-md shadow-brand/10"
                       >
                         {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 size={13} />}
@@ -1142,7 +1113,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handleConnect}
-                  disabled={isSaving}
+                  disabled={isSaving || !zohoApiAvailable}
                   className="btn-primary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 size={13} />}
@@ -1150,7 +1121,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handleTestConnection}
-                  disabled={testing}
+                  disabled={testing || !zohoApiAvailable}
                   className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe size={13} />}
@@ -1158,7 +1129,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handleSyncClients}
-                  disabled={syncingClients || !settings.connected}
+                  disabled={syncingClients || !settings.connected || !zohoApiAvailable}
                   className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {syncingClients ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck size={13} />}
@@ -1166,7 +1137,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handleSyncProducts}
-                  disabled={syncingProducts || !settings.connected}
+                  disabled={syncingProducts || !settings.connected || !zohoApiAvailable}
                   className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {syncingProducts ? <Loader2 className="w-3 h-3 animate-spin" /> : <PackageCheck size={13} />}
@@ -1174,7 +1145,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handleExportOneTestEstimate}
-                  disabled={exportingId !== null || !settings.connected}
+                  disabled={exportingId !== null || !settings.connected || !zohoApiAvailable}
                   className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {exportingId ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileSpreadsheet size={13} />}
@@ -1182,7 +1153,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handleExportOneTestInvoice}
-                  disabled={exportingId !== null || !settings.connected}
+                  disabled={exportingId !== null || !settings.connected || !zohoApiAvailable}
                   className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {exportingId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Receipt size={13} />}
@@ -1190,7 +1161,7 @@ export default function ZohoSettingsTab() {
                 </button>
                 <button
                   onClick={handlePullPaymentStatuses}
-                  disabled={pullingPayments || !settings.connected}
+                  disabled={pullingPayments || !settings.connected || !zohoApiAvailable}
                   className="btn-secondary justify-center text-[10px] uppercase tracking-widest font-black"
                 >
                   {pullingPayments ? <Loader2 className="w-3 h-3 animate-spin" /> : <DollarSign size={13} />}
@@ -1245,7 +1216,7 @@ export default function ZohoSettingsTab() {
                   </div>
                   <button 
                     onClick={handleSyncClients}
-                    disabled={syncingClients || !settings.connected}
+                    disabled={syncingClients || !settings.connected || !zohoApiAvailable}
                     className="mt-6 w-full py-3 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-700 transition-all flex items-center justify-center gap-2"
                   >
                     {syncingClients ? <Loader2 className="w-3 h-3 animate-spin text-slate-500" /> : <Play size={10} />}
@@ -1266,7 +1237,7 @@ export default function ZohoSettingsTab() {
                   </div>
                   <button 
                     onClick={handleSyncProducts}
-                    disabled={syncingProducts || !settings.connected}
+                    disabled={syncingProducts || !settings.connected || !zohoApiAvailable}
                     className="mt-6 w-full py-3 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-700 transition-all flex items-center justify-center gap-2"
                   >
                     {syncingProducts ? <Loader2 className="w-3 h-3 animate-spin text-slate-500" /> : <Play size={10} />}
@@ -1287,7 +1258,7 @@ export default function ZohoSettingsTab() {
                   </div>
                   <button 
                     onClick={handlePullPaymentStatuses}
-                    disabled={pullingPayments || !settings.connected}
+                    disabled={pullingPayments || !settings.connected || !zohoApiAvailable}
                     className="mt-6 w-full py-3 bg-white hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-700 transition-all flex items-center justify-center gap-2"
                   >
                     {pullingPayments ? <Loader2 className="w-3 h-3 animate-spin text-slate-500" /> : <Play size={10} />}
@@ -1363,7 +1334,7 @@ export default function ZohoSettingsTab() {
                           <td className="py-4 px-2 text-right">
                             <button
                               onClick={() => handlePushQuoteToZoho(quote)}
-                              disabled={exportingId !== null || !settings.connected}
+                              disabled={exportingId !== null || !settings.connected || !zohoApiAvailable}
                               className="px-4 py-2 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all flex items-center gap-1.5 ml-auto"
                             >
                               {exportingId === quote.id ? (
@@ -1444,7 +1415,7 @@ export default function ZohoSettingsTab() {
                           <td className="py-4 px-2 text-right">
                             <button
                               onClick={() => handleCreateZohoInvoice(job)}
-                              disabled={exportingId !== null || !settings.connected}
+                              disabled={exportingId !== null || !settings.connected || !zohoApiAvailable}
                               className="px-4 py-2 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 disabled:opacity-50 transition-all flex items-center gap-1.5 ml-auto"
                             >
                               {exportingId === job.id ? (

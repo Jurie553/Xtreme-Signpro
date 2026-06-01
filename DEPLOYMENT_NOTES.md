@@ -71,10 +71,26 @@ The static frontend can deploy to Vercel with the Vite framework preset.
 - Install command: `npm install`
 - Build command: `npm run build:vercel` or `npm run build` if you also want the unused Cloud Run server bundle generated
 - Output directory: `dist`
-- Vercel config file: `vercel.json` contains only the SPA rewrite to `index.html`
+- Vercel config file: `vercel.json` rewrites non-API routes to `index.html` for the SPA and leaves `/api/*` available for serverless functions.
 
-`vercel.json` intentionally does not declare `functions`, `builds`, or any `runtime`. The project has no `api/` function directory, and function runtime configuration can cause Vercel to fail before build with `Function Runtimes must have a valid version`.
+Vercel frontend-only deployment works for the app UI, Firebase client-side screens, routing, quotes, jobcards, products, inventory, approvals, and PDFs that do not require the custom Express server.
 
-The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Zoho OAuth, client sync, invoice push, and payment pull require Cloud Run or a future conversion of the Express routes into Vercel serverless functions under an `api/` directory.
+The existing Zoho Express API in `server.ts` is not executed by Vercel static hosting. Zoho OAuth, client sync, product sync, estimate export, invoice export, and payment pull require Cloud Run unless the Express routes are fully converted into Vercel serverless functions under the `api/` directory.
+
+This repo includes a lightweight Vercel fallback at `api/zoho/[...path].ts`. It intentionally returns JSON with a friendly `503` message instead of allowing Vercel to return the Vite HTML page for `/api/zoho/*`. That prevents frontend JSON parsing crashes, but it does not perform live Zoho sync.
 
 For full end-to-end operation with Zoho, use Cloud Run or migrate the backend routes first.
+
+## Vercel JSON Parse Error Fix
+
+If the app shows this message:
+
+`This API endpoint is not available on this deployment. Zoho backend routes may need Cloud Run or Vercel serverless functions.`
+
+then the frontend is working, but the live Zoho backend is not available in that Vercel deployment.
+
+Use one of these deployment choices:
+
+1. Deploy the full app to Cloud Run using `npm run build` and `npm start`.
+2. Keep Vercel as frontend-only and do not use live Zoho sync there.
+3. Convert the required Express endpoints in `server.ts` into real Vercel functions under `api/`.
