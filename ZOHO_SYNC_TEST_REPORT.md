@@ -25,21 +25,10 @@ Verification update on 2026-06-01:
 
 Routing update on 2026-06-01:
 
-- Added explicit Vercel function files for key Zoho routes instead of relying only on the catch-all route:
-  - `api/zoho/config.ts`
-  - `api/zoho/readiness.ts`
-  - `api/zoho/auth-url.ts`
-  - `api/zoho/callback.ts`
-  - `api/zoho/test-connection.ts`
-  - `api/zoho/sync-clients.ts`
-  - `api/zoho/sync-products.ts`
-  - `api/zoho/push-quote.ts`
-  - `api/zoho/push-invoice.ts`
-  - `api/zoho/pull-payments.ts`
-  - `api/zoho/token.ts`
-  - `api/zoho/disconnect.ts`
-- These explicit files delegate into the shared Zoho serverless implementation in `api/zoho/[...path].ts`.
-- Local explicit route invocation confirmed `/api/zoho/config`, `/api/zoho/readiness`, and `/api/zoho/auth-url` return valid JSON.
+- Consolidated Zoho back into one Vercel serverless catch-all function at `api/zoho/[...path].ts`.
+- Removed separate Zoho route files so the deployment stays within the Vercel Hobby plan serverless function limit.
+- The single catch-all handles `/api/zoho/config`, `/api/zoho/readiness`, `/api/zoho/auth-url`, `/api/zoho/callback`, `/api/zoho/test-connection`, `/api/zoho/sync-clients`, `/api/zoho/sync-products`, `/api/zoho/push-quote`, `/api/zoho/push-invoice`, `/api/zoho/pull-payments`, `/api/zoho/token`, and `/api/zoho/disconnect`.
+- Local catch-all invocation confirmed `/api/zoho/config`, `/api/zoho/readiness`, and `/api/zoho/auth-url` return valid JSON.
 
 ## What Passed
 
@@ -51,7 +40,7 @@ Routing update on 2026-06-01:
 - `/api/zoho/auth-url` returns a friendly missing-client-id warning locally instead of crashing.
 - `/api/zoho/readiness` now returns friendly JSON instead of hanging when local Firebase config is missing.
 - Frontend Zoho API calls now use guarded JSON handling and do not call JSON parsing on HTML, empty, or non-JSON responses.
-- Vercel now has a `/api/zoho/*` fallback function that returns JSON with a clear backend-unavailable message instead of serving `index.html`.
+- Vercel now has a single `/api/zoho/*` catch-all function that returns JSON instead of serving `index.html`.
 - `vercel.json` no longer rewrites `/api/*` paths to the Vite SPA shell.
 - `/api/zoho/auth-url` now returns `{ success: true, authUrl, url }` when OAuth env vars are present.
 - `/api/zoho/auth-url` returns a safe JSON error when required OAuth env vars are missing.
@@ -133,7 +122,7 @@ Connect OAuth now:
 - Shows a friendly error when OAuth is not configured or the endpoint response is empty/non-JSON.
 - Does not expose `ZOHO_CLIENT_SECRET` to the frontend.
 
-Vercel fallback verification:
+Vercel catch-all verification:
 
 - Missing env returned:
 
@@ -219,7 +208,7 @@ Deployment still needs Firestore permission verification for:
   - Added backend-unavailable warning and disables live sync buttons when Vercel does not provide the backend.
 
 - `api/zoho/[...path].ts`
-  - Replaced Vercel JSON fallback with working serverless Zoho API handlers.
+  - Replaced Vercel JSON fallback with one working catch-all serverless Zoho API handler.
   - Added OAuth URL generation and callback token exchange.
   - Added secure token storage in `zoho_private/state`.
   - Added readiness, test connection, client sync, product sync, estimate export, invoice export, payment pull, token status, and disconnect handlers.
