@@ -83,7 +83,18 @@ const safeError = (err: any) => err?.message || String(err);
 const stripProtocol = (value = '') => String(value || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
 const getPath = (req: any) => {
   const value = req.query?.path;
-  return Array.isArray(value) ? value.join('/') : String(value || '');
+  const queryPath = Array.isArray(value) ? value.join('/') : String(value || '');
+  if (queryPath) return queryPath.replace(/^\/+|\/+$/g, '');
+
+  const rawUrl = String(req.url || '');
+  const pathname = rawUrl.split('?')[0] || '';
+  const marker = '/api/zoho/';
+  const markerIndex = pathname.indexOf(marker);
+  if (markerIndex >= 0) {
+    return decodeURIComponent(pathname.slice(markerIndex + marker.length)).replace(/^\/+|\/+$/g, '');
+  }
+
+  return decodeURIComponent(pathname.replace(/^\/+|\/+$/g, ''));
 };
 
 const parseBody = (req: any) => {

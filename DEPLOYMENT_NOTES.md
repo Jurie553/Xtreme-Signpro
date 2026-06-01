@@ -96,6 +96,8 @@ The single catch-all implements:
 - `/api/zoho/token`
 - `/api/zoho/disconnect`
 
+The catch-all reads the route from Vercel's `req.query.path` and also falls back to parsing `req.url`. This is important because some deployments can invoke the catch-all without preserving the final route segment in `query.path`.
+
 ## Vercel Zoho Requirements
 
 For Zoho OAuth and sync on Vercel, set these variables in Vercel Project Settings:

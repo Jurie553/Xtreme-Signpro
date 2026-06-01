@@ -30,6 +30,13 @@ Routing update on 2026-06-01:
 - The single catch-all handles `/api/zoho/config`, `/api/zoho/readiness`, `/api/zoho/auth-url`, `/api/zoho/callback`, `/api/zoho/test-connection`, `/api/zoho/sync-clients`, `/api/zoho/sync-products`, `/api/zoho/push-quote`, `/api/zoho/push-invoice`, `/api/zoho/pull-payments`, `/api/zoho/token`, and `/api/zoho/disconnect`.
 - Local catch-all invocation confirmed `/api/zoho/config`, `/api/zoho/readiness`, and `/api/zoho/auth-url` return valid JSON.
 
+Path parsing update on 2026-06-01:
+
+- The catch-all route now parses `req.url` when Vercel does not populate `req.query.path`.
+- This fixes cases where a live request to `/api/zoho/config` was being interpreted as `/api/zoho/`.
+- Confirmed locally that requests shaped like `/api/zoho/config`, `/api/zoho/readiness?x=1`, and `/api/zoho/auth-url` still route correctly with an empty query object.
+- Confirmed there is no `vercel-frontend-fallback` response string left in the API implementation.
+
 ## What Passed
 
 - `npm run typecheck` passed.
