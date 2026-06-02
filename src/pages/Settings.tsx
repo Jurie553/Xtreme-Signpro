@@ -328,6 +328,7 @@ export default function SettingsPage() {
   }, [companyList]);
 
   const handleSavePricing = async () => {
+    if (isSaving) return;
     console.log('Button Click: Commit Pricing Logic');
     setIsSaving(true);
     try {
@@ -342,6 +343,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveCompany = async () => {
+    if (isSaving) return;
     console.log('Button Click: Update Business Profile');
     setIsSaving(true);
     try {
@@ -356,6 +358,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveJobcardConfig = async () => {
+    if (isSaving) return;
     console.log('Button Click: Commit Job Card Operation Parameters');
     setIsSaving(true);
     try {

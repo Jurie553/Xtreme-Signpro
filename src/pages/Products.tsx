@@ -1112,6 +1112,7 @@ function ProductFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!formData.name?.trim()) {
       toast.error('Product catalog title is mandatory.');
       return;
@@ -1149,16 +1150,18 @@ function ProductFormModal({
         await updateDocument('products', product.id, payload);
         toast.success('Product configurations updated safely.');
       } else {
-        await createDocument('products', {
+        const productId = await createDocument('products', {
           ...payload,
           isArchived: false,
           createdAt: Date.now()
         });
+        if (!productId) throw new Error('Firestore did not return a new product ID.');
         toast.success('New standard print product cataloged.');
       }
       onClose();
-    } catch {
-      toast.error('Firestore operation failed. Please check parameters.');
+    } catch (error) {
+      console.error('Error saving product:', error);
+      toast.error('Could not save. Please check your connection and try again.');
     } finally {
       setIsSaving(false);
     }

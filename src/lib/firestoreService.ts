@@ -18,8 +18,8 @@ import {
   type DocumentData,
   type QueryConstraint
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
-import { useState, useEffect } from 'react';
+import { db, auth, isFirebaseConfigured } from './firebase';
+import { useState, useEffect, useMemo } from 'react';
 
 export enum OperationType {
   CREATE = 'create',
@@ -70,35 +70,117 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(safeMessage);
 }
 
+function assertFirebaseReady(operationType: OperationType, path: string | null) {
+  if (!isFirebaseConfigured) {
+    handleFirestoreError(
+      new Error('Firebase is not configured. Please check deployment environment variables and try again.'),
+      operationType,
+      path
+    );
+  }
+}
+
+function sanitizeForFirestore<T>(value: T): T {
+  if (value === undefined) return null as T;
+  if (value === null) return value;
+  if (value instanceof Date) return value as T;
+  if (value instanceof Timestamp) return value as T;
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeForFirestore(item)) as T;
+  }
+  if (typeof value === 'object') {
+    const output: Record<string, any> = {};
+    Object.entries(value as Record<string, any>).forEach(([key, child]) => {
+      if (child !== undefined) {
+        output[key] = sanitizeForFirestore(child);
+      }
+    });
+    return output as T;
+  }
+  return value;
+}
+
+function withAuditFields<T extends DocumentData>(data: T, isCreate: boolean): T {
+  const now = Date.now();
+  const cleanData = sanitizeForFirestore(data);
+  return {
+    ...cleanData,
+    ...(isCreate && !cleanData.createdAt ? { createdAt: now } : {}),
+    updatedAt: now,
+  };
+}
+
+const collectionCache = new Map<string, {
+  data: any[];
+  loading: boolean;
+  error: Error | null;
+  unsubscribe?: () => void;
+  listeners: Set<(state: { data: any[]; loading: boolean; error: Error | null }) => void>;
+}>();
+
+function getCollectionCacheKey(collectionPath: string, constraints: QueryConstraint[]) {
+  return `${collectionPath}::${constraints.length}`;
+}
+
 export function useCollection<T>(collectionPath: string, constraints: QueryConstraint[] = []) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const cacheKey = useMemo(() => getCollectionCacheKey(collectionPath, constraints), [collectionPath, constraints.length]);
 
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
+    let cache = collectionCache.get(cacheKey);
     
     try {
-      const q = query(collection(db, collectionPath), ...constraints);
-      const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!cache) {
+        cache = {
+          data: [],
+          loading: true,
+          error: null,
+          listeners: new Set()
+        };
+        collectionCache.set(cacheKey, cache);
+
+        const q = query(collection(db, collectionPath), ...constraints);
+        cache.unsubscribe = onSnapshot(q, (snapshot) => {
+          const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const current = collectionCache.get(cacheKey);
+          if (!current) return;
+          current.data = docs;
+          current.loading = false;
+          current.error = null;
+          current.listeners.forEach(listener => listener({ data: current.data, loading: current.loading, error: current.error }));
+        }, (err: any) => {
+          const msg = err?.message || String(err);
+          console.error(`Subscription error for ${collectionPath}:`, msg);
+          const current = collectionCache.get(cacheKey);
+          if (!current) return;
+          current.error = new Error(msg);
+          current.loading = false;
+          current.listeners.forEach(listener => listener({ data: current.data, loading: current.loading, error: current.error }));
+        });
+      }
+
+      const listener = (state: { data: any[]; loading: boolean; error: Error | null }) => {
         if (!isMounted) return;
-        
-        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
-        setData(docs);
-        setLoading(false);
-        setError(null);
-      }, (err: any) => {
-        if (!isMounted) return;
-        const msg = err?.message || String(err);
-        console.error(`Subscription error for ${collectionPath}:`, msg);
-        setError(new Error(msg));
-        setLoading(false);
-      });
+        setData(state.data as T[]);
+        setLoading(state.loading);
+        setError(state.error);
+      };
+
+      cache.listeners.add(listener);
+      listener({ data: cache.data, loading: cache.loading, error: cache.error });
       
       return () => {
         isMounted = false;
-        unsubscribe();
+        const activeCache = collectionCache.get(cacheKey);
+        if (!activeCache) return;
+        activeCache.listeners.delete(listener);
+        if (activeCache.listeners.size === 0) {
+          activeCache.unsubscribe?.();
+          collectionCache.delete(cacheKey);
+        }
       };
     } catch (err: any) {
       if (isMounted) {
@@ -107,7 +189,7 @@ export function useCollection<T>(collectionPath: string, constraints: QueryConst
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectionPath, constraints.length]); 
+  }, [cacheKey, collectionPath]); 
 
   return { data, loading, error };
 }
@@ -138,6 +220,7 @@ export function useFirestoreConnection() {
 
 export async function getCollection<T>(collectionPath: string, constraints: QueryConstraint[] = []) {
   try {
+    assertFirebaseReady(OperationType.LIST, collectionPath);
     const q = query(collection(db, collectionPath), ...constraints);
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
@@ -163,7 +246,9 @@ export function subscribeToCollection<T>(
 
 export async function createDocument<T extends DocumentData>(collectionPath: string, data: T) {
   try {
-    const docRef = await addDoc(collection(db, collectionPath), data);
+    assertFirebaseReady(OperationType.CREATE, collectionPath);
+    const payload = withAuditFields(data, true);
+    const docRef = await addDoc(collection(db, collectionPath), payload);
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, collectionPath);
@@ -173,8 +258,10 @@ export async function createDocument<T extends DocumentData>(collectionPath: str
 
 export async function updateDocument<T extends DocumentData>(collectionPath: string, id: string, data: Partial<T>) {
   try {
+    assertFirebaseReady(OperationType.UPDATE, `${collectionPath}/${id || 'missing-id'}`);
+    if (!id) throw new Error('Missing document ID for update.');
     const docRef = doc(db, collectionPath, id);
-    await updateDoc(docRef, data as any);
+    await updateDoc(docRef, withAuditFields(data as DocumentData, false) as any);
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${collectionPath}/${id}`);
@@ -184,8 +271,10 @@ export async function updateDocument<T extends DocumentData>(collectionPath: str
 
 export async function setDocument<T extends DocumentData>(collectionPath: string, id: string, data: T) {
   try {
+    assertFirebaseReady(OperationType.WRITE, `${collectionPath}/${id || 'missing-id'}`);
+    if (!id) throw new Error('Missing document ID for set.');
     const docRef = doc(db, collectionPath, id);
-    await setDoc(docRef, data, { merge: true });
+    await setDoc(docRef, withAuditFields(data, false), { merge: true });
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${collectionPath}/${id}`);
@@ -195,6 +284,8 @@ export async function setDocument<T extends DocumentData>(collectionPath: string
 
 export async function deleteDocument(collectionPath: string, id: string) {
   try {
+    assertFirebaseReady(OperationType.DELETE, `${collectionPath}/${id || 'missing-id'}`);
+    if (!id) throw new Error('Missing document ID for delete.');
     const docRef = doc(db, collectionPath, id);
     await deleteDoc(docRef);
     return true;
@@ -206,6 +297,8 @@ export async function deleteDocument(collectionPath: string, id: string) {
 
 export async function getDocument<T>(collectionPath: string, id: string) {
   try {
+    assertFirebaseReady(OperationType.GET, `${collectionPath}/${id || 'missing-id'}`);
+    if (!id) throw new Error('Missing document ID for get.');
     const docRef = doc(db, collectionPath, id);
     const snapshot = await getDoc(docRef);
     if (snapshot.exists()) {

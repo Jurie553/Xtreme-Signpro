@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Search, Filter, Edit2, Share2, Trash2, CheckCircle2, Clock, AlertTriangle, Calendar, X, ChevronUp, ChevronDown, Plus, Mail, MessageCircle, FileText, ExternalLink, Printer, Settings, Wrench, Layers, Scissors, Check, Zap, Info, Book, Box } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { useCollection, updateDocument, deleteDocument } from '../lib/firestoreService';
@@ -58,12 +58,14 @@ export default function Jobs() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [viewingJobDetails, setViewingJobDetails] = useState<Job | null>(null);
 
+  const clientById = useMemo(() => new Map(clients.map(client => [client.id, client])), [clients]);
+
   const getClientName = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
+    const client = clientById.get(clientId);
     return client ? (client.companyName || client.name) : 'Unknown';
   };
 
-  const filteredJobs = jobs.filter(job => {
+  const filteredJobs = useMemo(() => jobs.filter(job => {
     const clientName = (job.clientName || getClientName(job.clientId)).toLowerCase();
     const jobNum = job.jobNumber.toLowerCase();
     const matchesSearch = clientName.includes(searchTerm.toLowerCase()) || 
@@ -80,9 +82,9 @@ export default function Jobs() {
                        (!dueEnd || dueDate <= new Date(dueEnd).setHours(23, 59, 59, 999));
 
     return matchesSearch && matchesCreated && matchesDue;
-  });
+  }), [jobs, searchTerm, createdStart, createdEnd, dueStart, dueEnd, clientById]);
 
-  const sortedJobs = [...filteredJobs].sort((a, b) => {
+  const sortedJobs = useMemo(() => [...filteredJobs].sort((a, b) => {
     let valA: any = sortField === 'clientName' ? (a.clientName || getClientName(a.clientId)) : a[sortField as keyof Job];
     let valB: any = sortField === 'clientName' ? (b.clientName || getClientName(b.clientId)) : b[sortField as keyof Job];
 
@@ -92,7 +94,7 @@ export default function Jobs() {
 
     const comparison = valA < valB ? -1 : 1;
     return sortOrder === 'asc' ? comparison : -comparison;
-  });
+  }), [filteredJobs, sortField, sortOrder, clientById]);
 
   const toggleSort = (field: keyof Job | 'clientName') => {
     if (sortField === field) {
@@ -113,6 +115,10 @@ export default function Jobs() {
     setIsUpdating(id);
     try {
       await updateDocument('jobs', id, { stage });
+      toast.success('Job stage saved successfully.');
+    } catch (error) {
+      console.error('Error updating job stage:', error);
+      toast.error('Could not save. Please check your connection and try again.');
     } finally {
       setIsUpdating(null);
     }

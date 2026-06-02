@@ -62,15 +62,14 @@ export default function Quotes() {
     };
   }, [quotes]);
 
+  const clientById = useMemo(() => new Map(clients.map(client => [client.id, client])), [clients]);
+
   const getClientName = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
+    const client = clientById.get(clientId);
     return client ? (client.companyName || client.name) : 'Unknown Client';
   };
 
   const filteredQuotes = useMemo(() => {
-    console.log('Quotes:', quotes);
-    console.log('Clients:', clients);
-    
     return quotes.filter(quote => {
       const clientName = getClientName(quote.clientId).toLowerCase();
       const quoteNumber = quote.quoteNumber.toLowerCase();
@@ -82,7 +81,7 @@ export default function Quotes() {
       
       return matchesSearch && matchesFilter;
     }).sort((a, b) => b.createdAt - a.createdAt);
-  }, [quotes, searchQuery, clients, statusFilter]);
+  }, [quotes, searchQuery, clientById, statusFilter]);
 
   const handleEdit = (quote: Quote) => {
     console.log('Button Click: Edit Quote', { id: quote.id });
@@ -116,6 +115,10 @@ export default function Quotes() {
     setIsUpdating(id);
     try {
       await updateDocument('quotes', id, { status });
+      toast.success('Quote status saved successfully.');
+    } catch (error) {
+      console.error('Error updating quote status:', error);
+      toast.error('Could not save. Please check your connection and try again.');
     } finally {
       setIsUpdating(null);
     }

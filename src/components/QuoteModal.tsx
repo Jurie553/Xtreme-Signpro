@@ -531,7 +531,16 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem, init
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
     console.log('Button Click: Finalize Quote', { isEdit: !!quote?.id, formData });
+    if (!formData.clientId) {
+      toast.error('Please select a client before saving the quote.');
+      return;
+    }
+    if (!items || items.length === 0) {
+      toast.error('Please add at least one quote line item before saving.');
+      return;
+    }
     setIsSaving(true);
     try {
       const finalData: Partial<Quote> = {
@@ -562,7 +571,7 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem, init
       toast.success('Quote saved successfully.');
     } catch (error) {
       console.error('Error saving quote:', error);
-      toast.error('Failed to save quote.');
+      toast.error('Could not save. Please check your connection and try again.');
     } finally {
       setIsSaving(false);
     }

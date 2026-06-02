@@ -956,6 +956,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
     console.log('Button Click: Commit Job to Registry', { isEdit: !!job?.id });
     
     // Enterprise Field Validations
@@ -999,7 +1000,8 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
         const sequence = await getNextSequence(`jobs_${year}`);
         const prefix = company?.jobCardPrefix || 'Jobcard';
         finalData.jobNumber = `${prefix}-${year}-${(sequence || 1).toString().padStart(3, '0')}`;
-        await createDocument('jobs', finalData as any);
+        const newJobId = await createDocument('jobs', finalData as any);
+        if (!newJobId) throw new Error('Firestore did not return a new job ID.');
       }
       setShowSuccess(true);
       toast.success('Job saved successfully.');
@@ -1009,7 +1011,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
       }, 1500);
     } catch (error) {
       console.error('Error saving job:', error);
-      toast.error('Failed to save job. Please check console for details.');
+      toast.error('Could not save. Please check your connection and try again.');
     } finally {
       setIsSaving(false);
     }

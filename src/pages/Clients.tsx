@@ -504,7 +504,12 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     console.log('Button Click: Save Client Details', { isEdit: !!client });
+    if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim()) {
+      toast.error('Please complete the client name, email, and phone number before saving.');
+      return;
+    }
     setIsSaving(true);
     try {
       // Auto-populate company name if empty
@@ -516,18 +521,23 @@ function ClientModal({ client, onClose }: { client: Client | null, onClose: () =
       };
       let newClientId = client?.id;
       if (client) {
+        if (!client.id) throw new Error('Missing client ID. Please reload and try again.');
         await updateDocument('clients', client.id, data);
+        toast.success('Client saved successfully.');
       } else {
         const docId = await createDocument('clients', data as any);
         if (docId) {
           newClientId = docId;
           setShowGuidedNextStep(newClientId);
+          toast.success('Client saved successfully.');
+        } else {
+          throw new Error('Firestore did not return a new client ID.');
         }
       }
       if (!newClientId || client) onClose();
     } catch (error) {
       console.error('Error saving client:', error);
-      toast.error('Failed to save client details.');
+      toast.error('Could not save. Please check your connection and try again.');
     } finally {
       setIsSaving(false);
     }

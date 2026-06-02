@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, TrendingUp, Briefcase, FileText, Users, Box, MessageSquareWarning, Clock, Plus, ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -18,36 +18,42 @@ export default function Dashboard() {
   const loading = quotesLoading || jobsLoading || clientsLoading || productsLoading;
   const now = new Date();
 
-  const acceptedThisMonth = quotes.filter(q => {
+  const dashboardData = useMemo(() => {
+    const acceptedThisMonth = quotes.filter(q => {
     const created = new Date(q.createdAt);
     return q.status === 'Accepted' && created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-  });
+    });
 
-  const activeJobs = jobs.filter(j => j.stage !== 'Delivered' && j.stage !== 'Cancelled' && j.status !== 'Completed');
-  const overdueJobs = activeJobs.filter(j => j.dueDate && j.dueDate < Date.now());
-  const dueSoonJobs = activeJobs
-    .filter(j => j.dueDate >= Date.now() && j.dueDate <= Date.now() + 5 * 24 * 60 * 60 * 1000)
-    .sort((a, b) => a.dueDate - b.dueDate)
-    .slice(0, 5);
-  const pendingApprovals = jobs.filter(j => j.artworkStatus === 'Pending' || j.artworkStatus === 'Changes Requested').length;
-  const pendingQuotes = quotes.filter(q => ['Draft', 'Sent', 'Viewed'].includes(q.status)).length;
+    const activeJobs = jobs.filter(j => j.stage !== 'Delivered' && j.stage !== 'Cancelled' && j.status !== 'Completed');
+    const overdueJobs = activeJobs.filter(j => j.dueDate && j.dueDate < Date.now());
+    const dueSoonJobs = activeJobs
+      .filter(j => j.dueDate >= Date.now() && j.dueDate <= Date.now() + 5 * 24 * 60 * 60 * 1000)
+      .sort((a, b) => a.dueDate - b.dueDate)
+      .slice(0, 5);
+    const pendingApprovals = jobs.filter(j => j.artworkStatus === 'Pending' || j.artworkStatus === 'Changes Requested').length;
+    const pendingQuotes = quotes.filter(q => ['Draft', 'Sent', 'Viewed'].includes(q.status)).length;
 
-  const chartData = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
-    const revenue = quotes
-      .filter(q => q.status === 'Accepted' && q.createdAt >= start.getTime() && q.createdAt <= end.getTime())
-      .reduce((sum, q) => sum + (q.subtotal || q.total || 0), 0);
-    return { name: date.toLocaleDateString(undefined, { weekday: 'short' }), revenue };
-  });
+    const chartData = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      const revenue = quotes
+        .filter(q => q.status === 'Accepted' && q.createdAt >= start.getTime() && q.createdAt <= end.getTime())
+        .reduce((sum, q) => sum + (q.subtotal || q.total || 0), 0);
+      return { name: date.toLocaleDateString(undefined, { weekday: 'short' }), revenue };
+    });
 
-  const recentActivity = [...quotes]
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 5);
+    const recentActivity = [...quotes]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 5);
+
+    return { acceptedThisMonth, activeJobs, overdueJobs, dueSoonJobs, pendingApprovals, pendingQuotes, chartData, recentActivity };
+  }, [quotes, jobs, now.getMonth(), now.getFullYear()]);
+
+  const { acceptedThisMonth, activeJobs, overdueJobs, dueSoonJobs, pendingApprovals, pendingQuotes, chartData, recentActivity } = dashboardData;
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in duration-500">
